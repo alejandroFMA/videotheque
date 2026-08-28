@@ -38,6 +38,13 @@ update public.shelves set is_public = false, slug = 'shelf-b'
 insert into public.films (id, title, spine_color)
 values (603, 'The Matrix', 'hsl(200 40% 40%)');
 
+-- Capture the real shelf ids while still superuser (RLS would hide
+-- shelf-b from user A later). Stashed in a custom GUC so the DO block
+-- below can read it: psql does not interpolate :'vars' inside $$ $$.
+select id as shelf_a_id from public.shelves where slug = 'shelf-a' \gset
+select id as shelf_b_id from public.shelves where slug = 'shelf-b' \gset
+set local "test.shelf_b_id" = :'shelf_b_id';
+
 -- ---- as anon --------------------------------------------------------
 set local role anon;
 set local "request.jwt.claims" = '';
@@ -73,11 +80,9 @@ set local "request.jwt.claims" =
 do $$
 declare
   a_shelf uuid;
-  b_shelf uuid;
   pos int;
 begin
   select id into a_shelf from public.shelves where slug = 'shelf-a';
-  select id into b_shelf from public.shelves where slug = 'shelf-b';
 
   pos := public.place_film(a_shelf, 603);
   assert pos = 1, 'first place_film should return position 1 (got ' || pos || ')';
@@ -86,14 +91,18 @@ begin
   assert pos = 1, 'repeat place_film should return existing position 1 (got ' || pos || ')';
   assert (select count(*) from public.shelf_items where shelf_id = a_shelf) = 1,
     'repeat place_film must not add a second row';
+end $$;
 
+do $$
+declare blocked boolean := false;
+begin
   begin
-    perform public.place_film(b_shelf, 603);
-  exception when others then
-    null;  -- RLS on shelf_items insert is expected to raise
+    perform public.place_film(current_setting('test.shelf_b_id')::uuid, 603);
+  exception when insufficient_privilege then
+    blocked := true;  -- expected: shelf_items insert RLS with-check rejects it
   end;
-  assert (select count(*) from public.shelf_items where shelf_id = b_shelf) = 0,
-    'user A must not be able to place a film on user B private shelf';
+  assert blocked,
+    'user A must be blocked by RLS from placing a film on user B private shelf';
 end $$;
 
 reset role;
