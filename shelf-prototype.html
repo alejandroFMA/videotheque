@@ -1,0 +1,471 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Shelf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#191320;
+    --ink-2:#221A2C;
+    --walnut:#7A4E2D;
+    --walnut-lip:#A6714A;
+    --walnut-dark:#4A2C18;
+    --card:#F2ECDD;
+    --marigold:#F2A81D;
+    --dust:#9A8FA6;
+
+    --spine-h:230px;
+    --board-h:24px;
+    --row: 254px; /* spine-h + board-h */
+
+    --display:"Fraunces",Georgia,"Times New Roman",serif;
+    --cond:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+    --body:"Barlow",system-ui,-apple-system,sans-serif;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--ink);
+    color:var(--card);
+    font-family:var(--body);
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;min-height:100%;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:radial-gradient(120% 70% at 50% -10%, rgba(242,168,29,.13), transparent 60%);
+  }
+
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  :focus-visible{outline:2px solid var(--marigold);outline-offset:3px;border-radius:2px}
+
+  /* ---------- header ---------- */
+  header{
+    position:sticky;top:0;z-index:30;
+    background:linear-gradient(var(--ink) 72%, rgba(25,19,32,0));
+    padding:20px 24px 26px;
+  }
+  .bar{
+    max-width:1180px;margin:0 auto;
+    display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;
+  }
+  h1{
+    font-family:var(--display);font-weight:600;font-variation-settings:"SOFT" 40,"WONK" 1;
+    font-size:26px;letter-spacing:-.01em;margin:0;line-height:1;
+  }
+  h1 span{color:var(--marigold)}
+  .count{
+    font-family:var(--cond);text-transform:uppercase;letter-spacing:.14em;
+    font-size:13px;color:var(--dust);white-space:nowrap;
+  }
+  .tools{margin-left:auto;display:flex;gap:10px;align-items:center;flex:1 1 320px;justify-content:flex-end}
+
+  .search{position:relative;flex:1 1 300px;max-width:420px}
+  .search input{
+    width:100%;padding:11px 14px 11px 38px;
+    background:var(--ink-2);border:1px solid rgba(242,236,221,.14);border-radius:3px;
+    color:var(--card);font-family:var(--body);font-size:15px;
+  }
+  .search input::placeholder{color:var(--dust)}
+  .search input:focus{border-color:var(--marigold);outline:none}
+  .search svg{position:absolute;left:13px;top:13px;width:16px;height:16px;stroke:var(--dust);fill:none;stroke-width:2}
+
+  select{
+    padding:11px 12px;background:var(--ink-2);color:var(--card);
+    border:1px solid rgba(242,236,221,.14);border-radius:3px;
+    font-family:var(--cond);font-size:14px;letter-spacing:.06em;text-transform:uppercase;
+  }
+
+  /* ---------- results ---------- */
+  .results{
+    position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:40;
+    background:var(--ink-2);border:1px solid rgba(242,236,221,.14);border-radius:3px;
+    max-height:min(60vh,460px);overflow:auto;box-shadow:0 24px 50px rgba(0,0,0,.55);
+  }
+  .results:empty{display:none}
+  .res{display:flex;gap:12px;padding:10px 12px;width:100%;text-align:left;align-items:center;border-bottom:1px solid rgba(242,236,221,.07)}
+  .res:last-child{border-bottom:0}
+  .res:hover,.res:focus-visible{background:rgba(242,168,29,.1)}
+  .res img{width:40px;height:60px;object-fit:cover;background:#000;border-radius:2px;flex:none}
+  .res .no{width:40px;height:60px;background:rgba(242,236,221,.07);border-radius:2px;flex:none}
+  .res b{display:block;font-weight:600;font-size:15px}
+  .res small{color:var(--dust);font-family:var(--cond);letter-spacing:.06em;font-size:13px}
+  .res .on{margin-left:auto;color:var(--marigold);font-family:var(--cond);font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+  .msg{padding:14px;color:var(--dust);font-size:14px}
+  .msg a{color:var(--marigold)}
+
+  /* ---------- the shelf ---------- */
+  main{flex:1;position:relative;z-index:1;padding:0 24px 60px}
+  .wall{
+    max-width:1180px;margin:0 auto;padding:28px 22px 0;
+    display:flex;flex-wrap:wrap;align-items:flex-end;align-content:flex-start;
+    gap:var(--board-h) 3px;min-height:var(--row);
+    background:
+      repeating-linear-gradient(to bottom,
+        transparent 0 calc(28px + var(--spine-h)),
+        var(--walnut-lip) calc(28px + var(--spine-h)) calc(30px + var(--spine-h)),
+        var(--walnut) calc(30px + var(--spine-h)) calc(28px + var(--row))),
+      linear-gradient(180deg, rgba(242,236,221,.045), rgba(242,236,221,0) 300px);
+    border-left:1px solid rgba(0,0,0,.4);border-right:1px solid rgba(0,0,0,.4);
+  }
+
+  .spine{
+    height:var(--spine-h);width:34px;flex:none;position:relative;
+    border-radius:1px 1px 0 0;padding:10px 0;
+    display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+    box-shadow:2px 0 4px rgba(0,0,0,.45), inset -3px 0 6px rgba(0,0,0,.28), inset 3px 0 4px rgba(255,255,255,.13);
+    transition:transform .28s cubic-bezier(.2,.8,.3,1), box-shadow .28s;
+    transform-origin:bottom center;
+  }
+  .spine:hover,.spine:focus-visible{transform:translateY(-16px) rotate(-1.2deg);box-shadow:6px 6px 18px rgba(0,0,0,.6)}
+  .spine.pulled{transform:translateY(-26px) rotate(-2.5deg)}
+  .spine.new{animation:slot .5s cubic-bezier(.2,.9,.3,1)}
+  @keyframes slot{from{transform:translateY(-70px) rotate(-6deg);opacity:0}to{transform:none;opacity:1}}
+
+  .spine .t{
+    writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);
+    font-family:var(--cond);font-weight:600;font-size:14px;letter-spacing:.07em;
+    text-transform:uppercase;line-height:1;
+    max-height:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .spine .n{font-family:var(--cond);font-size:11px;letter-spacing:.06em;opacity:.75}
+  .spine .dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.55}
+
+  .empty{
+    max-width:1180px;margin:0 auto;padding:70px 22px;text-align:center;color:var(--dust);
+  }
+  .empty p{font-family:var(--display);font-size:20px;color:var(--card);margin:0 0 6px}
+  .empty small{font-size:14px}
+
+  /* ---------- film case ---------- */
+  .sheet{
+    position:fixed;inset:0;z-index:60;display:none;
+    background:rgba(10,7,14,.78);backdrop-filter:blur(3px);
+    padding:24px;overflow:auto;
+  }
+  .sheet.open{display:flex;align-items:center;justify-content:center}
+  .case{
+    background:var(--ink-2);border:1px solid rgba(242,236,221,.14);
+    max-width:720px;width:100%;display:flex;gap:26px;padding:26px;border-radius:3px;
+    box-shadow:0 30px 80px rgba(0,0,0,.7);animation:rise .3s cubic-bezier(.2,.8,.3,1);
+  }
+  @keyframes rise{from{transform:translateY(18px);opacity:0}to{transform:none;opacity:1}}
+  .case img{width:210px;flex:none;border-radius:2px;background:#000;align-self:flex-start}
+  .case .meta{flex:1;min-width:0}
+  .eyebrow{font-family:var(--cond);text-transform:uppercase;letter-spacing:.16em;font-size:12px;color:var(--marigold);margin-bottom:8px}
+  .case h2{font-family:var(--display);font-weight:600;font-size:28px;line-height:1.1;margin:0 0 6px}
+  .case .sub{font-family:var(--cond);letter-spacing:.08em;text-transform:uppercase;font-size:13px;color:var(--dust);margin-bottom:14px}
+  .case p{font-size:15px;line-height:1.55;color:rgba(242,236,221,.86);margin:0 0 20px;max-height:220px;overflow:auto}
+  .acts{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{padding:9px 16px;border:1px solid rgba(242,236,221,.22);border-radius:2px;font-family:var(--cond);text-transform:uppercase;letter-spacing:.1em;font-size:13px}
+  .btn:hover{border-color:var(--marigold);color:var(--marigold)}
+  .btn.warn:hover{border-color:#E4585B;color:#E4585B}
+
+  /* ---------- key gate ---------- */
+  .gate{position:fixed;inset:0;z-index:80;background:var(--ink);display:flex;align-items:center;justify-content:center;padding:24px}
+  .gate .box{max-width:440px}
+  .gate h2{font-family:var(--display);font-weight:600;font-size:30px;margin:0 0 10px}
+  .gate p{color:var(--dust);font-size:15px;line-height:1.6;margin:0 0 18px}
+  .gate p a{color:var(--marigold)}
+  .gate input{width:100%;padding:12px 14px;background:var(--ink-2);border:1px solid rgba(242,236,221,.18);border-radius:3px;color:var(--card);font-size:15px;font-family:var(--body)}
+  .gate .row{display:flex;gap:10px;margin-top:12px}
+  .gate .err{color:#E4585B;font-size:14px;min-height:20px;margin-top:10px}
+
+  footer{
+    position:relative;z-index:1;padding:0 24px 30px;
+    font-family:var(--cond);font-size:12px;letter-spacing:.06em;color:rgba(154,143,166,.7);
+  }
+  footer div{max-width:1180px;margin:0 auto}
+
+  @media (max-width:640px){
+    :root{--spine-h:180px;--board-h:20px;--row:200px}
+    .spine{width:30px}
+    .spine .t{font-size:12px;max-height:135px}
+    .case{flex-direction:column;padding:20px}
+    .case img{width:130px;align-self:center}
+    h1{font-size:22px}
+    .tools{flex-basis:100%}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+
+<div class="gate" id="gate">
+  <div class="box">
+    <h2>The Shelf</h2>
+    <p>Searching needs a TMDB API key. It is free: grab one at
+      <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org</a> (the short v3 key).
+      It is stored in this browser only.</p>
+    <input id="key" type="password" placeholder="Paste your v3 key" autocomplete="off" spellcheck="false">
+    <div class="row"><button class="btn" id="keyGo">Open the shelf</button></div>
+    <div class="err" id="keyErr"></div>
+  </div>
+</div>
+
+<header>
+  <div class="bar">
+    <h1>The <span>Shelf</span></h1>
+    <div class="count" id="count">0 spines</div>
+    <div class="tools">
+      <div class="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="q" type="search" placeholder="Search a film to shelve it" autocomplete="off">
+        <div class="results" id="results"></div>
+      </div>
+      <select id="sort" aria-label="Sort">
+        <option value="num">Spine no.</option>
+        <option value="az">Title A–Z</option>
+        <option value="year">Year ↓</option>
+      </select>
+    </div>
+  </div>
+</header>
+
+<main><div class="wall" id="wall"></div><div class="empty" id="empty" hidden>
+  <p>The shelf is empty.</p>
+  <small>Search a title above and it will be shelved with its spine number.</small>
+</div></main>
+
+<footer><div>This product uses the TMDB API but is not endorsed or certified by TMDB. · Personal project.</div></footer>
+
+<div class="sheet" id="sheet"><div class="case" id="case"></div></div>
+
+<script>
+(() => {
+  const IMG = 'https://image.tmdb.org/t/p/';
+  const $ = s => document.querySelector(s);
+  let key = '', films = [], sort = 'num';
+
+  /* ---------- storage ---------- */
+  const store = {
+    async get(k){
+      try{
+        if (window.storage) { const r = await window.storage.get(k); return r ? r.value : null; }
+        return localStorage.getItem(k);
+      }catch(e){ return null; }
+    },
+    async set(k,v){
+      try{
+        if (window.storage) return void await window.storage.set(k,v);
+        localStorage.setItem(k,v);
+      }catch(e){}
+    }
+  };
+  const save = () => store.set('shelf', JSON.stringify(films));
+
+  /* ---------- spine colour ---------- */
+  function hsl(r,g,b){
+    r/=255;g/=255;b/=255;
+    const mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2;
+    let h=0,s=0;
+    if(mx!==mn){
+      const d=mx-mn;
+      s=l>.5?d/(2-mx-mn):d/(mx+mn);
+      h=mx===r?((g-b)/d+(g<b?6:0)):mx===g?((b-r)/d+2):((r-g)/d+4);
+      h*=60;
+    }
+    return [h,s,l];
+  }
+  function fallbackColor(id){
+    const hues=[8,28,44,142,192,214,268,330];
+    return `hsl(${hues[id % hues.length]} 42% 40%)`;
+  }
+  function spineColor(path,id){
+    return new Promise(res => {
+      if(!path) return res(fallbackColor(id));
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try{
+          const c = document.createElement('canvas');
+          c.width = 18; c.height = 27;
+          const x = c.getContext('2d');
+          x.drawImage(img,0,0,18,27);
+          const d = x.getImageData(0,0,18,27).data;
+          let r=0,g=0,b=0,w=0;
+          for(let i=0;i<d.length;i+=4){
+            const [,s,l] = hsl(d[i],d[i+1],d[i+2]);
+            const weight = .25 + s*1.5 * (l>.12 && l<.9 ? 1 : .2);
+            r+=d[i]*weight; g+=d[i+1]*weight; b+=d[i+2]*weight; w+=weight;
+          }
+          let [h,s,l] = hsl(r/w, g/w, b/w);
+          s = Math.min(.68, Math.max(.3, s));
+          l = Math.min(.58, Math.max(.3, l));
+          res(`hsl(${Math.round(h)} ${Math.round(s*100)}% ${Math.round(l*100)}%)`);
+        }catch(e){ res(fallbackColor(id)); }
+      };
+      img.onerror = () => res(fallbackColor(id));
+      img.src = IMG + 'w92' + path;
+    });
+  }
+
+  /* ---------- API ---------- */
+  async function tmdb(path, params={}){
+    const u = new URL('https://api.themoviedb.org/3' + path);
+    u.searchParams.set('api_key', key);
+    u.searchParams.set('language', 'en-US');
+    for (const [k,v] of Object.entries(params)) u.searchParams.set(k,v);
+    let r;
+    try{ r = await fetch(u); }
+    catch(e){ throw new Error('NET'); }
+    if (r.status === 401) throw new Error('KEY');
+    if (!r.ok) throw new Error('HTTP');
+    return r.json();
+  }
+
+  /* ---------- the shelf ---------- */
+  function ordered(){
+    const a = films.slice();
+    if (sort === 'az') a.sort((x,y) => x.title.localeCompare(y.title,'es'));
+    if (sort === 'year') a.sort((x,y) => (y.year||0) - (x.year||0));
+    return a;
+  }
+  function render(fresh){
+    const wall = $('#wall');
+    wall.innerHTML = '';
+    $('#empty').hidden = films.length > 0;
+    $('#count').textContent = films.length === 1 ? '1 spine' : films.length + ' spines';
+
+    ordered().forEach(f => {
+      const n = films.indexOf(f) + 1;
+      const el = document.createElement('button');
+      el.className = 'spine' + (fresh === f.id ? ' new' : '');
+      el.style.background = `linear-gradient(100deg, rgba(255,255,255,.14), rgba(0,0,0,.2)), ${f.color}`;
+      el.style.color = f.dark ? '#12100F' : '#F6F2E8';
+      el.style.width = (30 + (f.id % 4) * 3) + 'px';
+      el.setAttribute('aria-label', `${f.title}, spine ${n}`);
+      el.innerHTML = `<div class="dot"></div><div class="t">${esc(f.title)}</div><div class="n">${n}</div>`;
+      el.onclick = () => open(f, n, el);
+      wall.appendChild(el);
+    });
+  }
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  /* ---------- film case ---------- */
+  let pulled = null;
+  async function open(f, n, el){
+    if (pulled) pulled.classList.remove('pulled');
+    pulled = el; el.classList.add('pulled');
+
+    $('#case').innerHTML = `
+      ${f.poster ? `<img src="${IMG}w342${f.poster}" alt="${esc(f.title)} poster">` : ''}
+      <div class="meta">
+        <div class="eyebrow">Spine ${n}</div>
+        <h2>${esc(f.title)}</h2>
+        <div class="sub" id="sub">${f.year || 'n/d'}${f.director ? ' · ' + esc(f.director) : ''}</div>
+        <p>${esc(f.overview || 'No synopsis available.')}</p>
+        <div class="acts">
+          <button class="btn" id="close">Close</button>
+          <button class="btn warn" id="drop">Take off the shelf</button>
+        </div>
+      </div>`;
+    $('#sheet').classList.add('open');
+    $('#close').onclick = close;
+    $('#drop').onclick = () => { films = films.filter(x => x.id !== f.id); save(); render(); close(); };
+    $('#close').focus();
+
+    if (f.director === undefined) {
+      try{
+        const c = await tmdb(`/movie/${f.id}/credits`);
+        f.director = (c.crew.find(p => p.job === 'Director') || {}).name || '';
+        save();
+        const sub = $('#sub');
+        if (sub) sub.textContent = `${f.year || 'n/d'}${f.director ? ' · ' + f.director : ''}`;
+      }catch(e){}
+    }
+  }
+  function close(){
+    $('#sheet').classList.remove('open');
+    if (pulled) { pulled.classList.remove('pulled'); pulled.focus(); pulled = null; }
+  }
+  $('#sheet').onclick = e => { if (e.target.id === 'sheet') close(); };
+  addEventListener('keydown', e => { if (e.key === 'Escape') { close(); $('#results').innerHTML = ''; } });
+
+  /* ---------- search ---------- */
+  let timer;
+  $('#q').oninput = e => {
+    clearTimeout(timer);
+    const term = e.target.value.trim();
+    if (term.length < 2) return void ($('#results').innerHTML = '');
+    timer = setTimeout(() => search(term), 320);
+  };
+  async function search(term){
+    const box = $('#results');
+    box.innerHTML = '<div class="msg">Searching…</div>';
+    let data;
+    try{ data = await tmdb('/search/movie', { query: term, include_adult: 'false' }); }
+    catch(err){
+      box.innerHTML = `<div class="msg">${
+        err.message === 'KEY' ? 'That key is not valid. <a href="#" id="reset">Change key</a>' :
+        err.message === 'NET' ? 'The browser blocked the request to TMDB. Download this file and open it from your machine.' :
+        'TMDB did not respond. Try again.'}</div>`;
+      const r = document.getElementById('reset');
+      if (r) r.onclick = ev => { ev.preventDefault(); store.set('key',''); location.reload(); };
+      return;
+    }
+    const list = data.results.slice(0, 12);
+    if (!list.length) return void (box.innerHTML = `<div class="msg">Nothing for “${esc(term)}”.</div>`);
+
+    box.innerHTML = '';
+    list.forEach(m => {
+      const has = films.some(f => f.id === m.id);
+      const b = document.createElement('button');
+      b.className = 'res';
+      b.innerHTML = `${m.poster_path ? `<img src="${IMG}w92${m.poster_path}" alt="">` : '<div class="no"></div>'}
+        <span><b>${esc(m.title)}</b><small>${(m.release_date||'').slice(0,4) || 'n/d'}</small></span>
+        ${has ? '<span class="on">On the shelf</span>' : ''}`;
+      if (!has) b.onclick = () => add(m);
+      else b.disabled = true;
+      box.appendChild(b);
+    });
+  }
+
+  async function add(m){
+    const color = await spineColor(m.poster_path, m.id);
+    const l = Number((color.match(/(\d+)%\)$/) || [])[1] || 40);
+    films.push({
+      id: m.id, title: m.title, year: Number((m.release_date||'').slice(0,4)) || null,
+      poster: m.poster_path, overview: m.overview, color, dark: l > 55
+    });
+    save();
+    $('#results').innerHTML = '';
+    $('#q').value = '';
+    render(m.id);
+  }
+
+  $('#sort').onchange = e => { sort = e.target.value; render(); };
+
+  /* ---------- boot ---------- */
+  $('#keyGo').onclick = start;
+  $('#key').onkeydown = e => { if (e.key === 'Enter') start(); };
+  async function start(){
+    const v = $('#key').value.trim();
+    if (!v) return void ($('#keyErr').textContent = 'The key is missing.');
+    key = v;
+    $('#keyErr').textContent = 'Checking…';
+    try{
+      await tmdb('/configuration');
+      store.set('key', v);
+      $('#gate').remove();
+      $('#q').focus();
+    }catch(err){
+      $('#keyErr').textContent =
+        err.message === 'KEY' ? 'TMDB rejected that key. Check it is the v3 one.' :
+        err.message === 'NET' ? 'The browser blocked the connection to TMDB. Download the file and open it from your machine.' :
+        'No response from TMDB. Try again.';
+    }
+  }
+
+  (async () => {
+    const saved = await store.get('shelf');
+    if (saved) { try{ films = JSON.parse(saved); }catch(e){} }
+    render();
+    const k = await store.get('key');
+    if (k) { key = k; $('#gate').remove(); }
+  })();
+})();
+</script>
