@@ -105,6 +105,47 @@ begin
     'user A must be blocked by RLS from placing a film on user B private shelf';
 end $$;
 
+-- ---- reorder_shelf, as user A -----------------------------------
+do $$
+declare a_shelf uuid;
+begin
+  select id into a_shelf from public.shelves where slug = 'shelf-a';
+
+  insert into public.films (id, title, spine_color)
+  values (24428, 'The Avengers', 'hsl(10 40% 40%)'),
+         (1726,  'Iron Man',     'hsl(40 40% 40%)');
+
+  perform public.place_film(a_shelf, 24428);  -- position 2
+  perform public.place_film(a_shelf, 1726);   -- position 3
+
+  perform public.reorder_shelf(a_shelf, array[1726, 603, 24428]);
+
+  assert (select position from public.shelf_items
+            where shelf_id = a_shelf and film_id = 1726)  = 1,
+    'reorder: film 1726 should be at position 1';
+  assert (select position from public.shelf_items
+            where shelf_id = a_shelf and film_id = 603)   = 2,
+    'reorder: film 603 should be at position 2';
+  assert (select position from public.shelf_items
+            where shelf_id = a_shelf and film_id = 24428) = 3,
+    'reorder: film 24428 should be at position 3';
+end $$;
+
+-- ---- reorder_shelf is a no-op for a non-owner -------------------
+set local "request.jwt.claims" =
+  '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}';
+
+do $$
+declare a_shelf uuid;
+begin
+  select id into a_shelf from public.shelves where slug = 'shelf-a';
+  -- user B; shelf-a is public so B can read it, but must not reorder it
+  perform public.reorder_shelf(a_shelf, array[603, 24428, 1726]);
+  assert (select position from public.shelf_items
+            where shelf_id = a_shelf and film_id = 1726) = 1,
+    'reorder_shelf by a non-owner must not change positions';
+end $$;
+
 reset role;
 rollback;
 

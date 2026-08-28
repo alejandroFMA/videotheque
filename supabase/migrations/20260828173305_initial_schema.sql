@@ -190,3 +190,27 @@ begin
   return result_pos;
 end;
 $$;
+
+-- =====================================================================
+--  reorder_shelf · apply a drag-and-drop ordering in one call
+--
+--  p_order is the full list of film_id for the shelf, in the desired
+--  order. position becomes the 1-based index within that list. Runs as
+--  the caller, so the UPDATE is filtered by the shelf_items update
+--  policy: a non-owner updates nothing and gets no error. film_id values
+--  omitted from p_order keep their old position.
+-- =====================================================================
+create or replace function public.reorder_shelf(p_shelf uuid, p_order integer[])
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  update public.shelf_items si
+     set position = ord.idx::integer
+    from unnest(p_order) with ordinality as ord(film_id, idx)
+   where si.shelf_id = p_shelf
+     and si.film_id  = ord.film_id;
+end;
+$$;
