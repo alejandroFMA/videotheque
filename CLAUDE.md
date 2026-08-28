@@ -1,8 +1,8 @@
 # Videothèque
 
 A film shelf. Each user owns one shelf and fills it by searching TMDB. Films are
-drawn as case spines standing on a wooden board, each with its spine number.
-Visual reference: thecriterioncloset.com
+drawn as case spines standing on a wooden board, in an order the owner sets by
+dragging. Visual reference: thecriterioncloset.com
 
 ## Stack
 
@@ -32,11 +32,13 @@ Three tables, normalised from the start. Full SQL with policies lives in
 `supabase/migrations/`.
 
 - `films`: global TMDB cache. Primary key is the TMDB id. Filled the first time
-  anyone adds that film.
+  anyone adds that film, written by that user's browser with the anon key.
 - `shelves`: one shelf per user. `slug` drives the public URL, `is_public`
   controls access without a session.
 - `shelf_items`: composite primary key (shelf_id, film_id). `position` is the
-  spine number.
+  display order within the shelf: `place_film` sets it when the film is added,
+  `reorder_shelf` rewrites it on drag-and-drop. It is never shown, and gaps
+  left by deletion are not compacted.
 
 Rules that do not bend:
 
@@ -45,10 +47,13 @@ Rules that do not bend:
   from the client.
 - **The TMDB key never reaches the browser.** It lives only as an environment
   variable inside `/api/tmdb`.
-- **The server assigns the spine number**, through the `place_film` function.
-  Computing it client-side with a prior `max()` lets two tabs collide.
-- **Spine colour is computed once**, when the film enters the cache, and stored
-  in `films.spine_color`. It is not recomputed in every visitor's browser.
+- **The server assigns list position.** `place_film` appends a new film at the
+  end of the order; `reorder_shelf` applies a whole drag-and-drop reordering in
+  one call. Computing positions client-side with a prior `max()` lets two tabs
+  collide.
+- **Spine colour is computed once**, in the browser of the first user to add
+  the film, from the public poster, and stored in `films.spine_color`. It is
+  not recomputed afterwards.
 
 Reading a shelf takes one call: PostgREST follows the foreign key with
 `.select('position, films(*)')`. The join is not written by hand.
