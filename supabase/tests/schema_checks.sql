@@ -65,6 +65,37 @@ begin
   assert not wrote, 'anon must not be able to write to the films cache';
 end $$;
 
+-- ---- as user A ----------------------------------------------------
+set local role authenticated;
+set local "request.jwt.claims" =
+  '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
+
+do $$
+declare
+  a_shelf uuid;
+  b_shelf uuid;
+  pos int;
+begin
+  select id into a_shelf from public.shelves where slug = 'shelf-a';
+  select id into b_shelf from public.shelves where slug = 'shelf-b';
+
+  pos := public.place_film(a_shelf, 603);
+  assert pos = 1, 'first place_film should return position 1 (got ' || pos || ')';
+
+  pos := public.place_film(a_shelf, 603);
+  assert pos = 1, 'repeat place_film should return existing position 1 (got ' || pos || ')';
+  assert (select count(*) from public.shelf_items where shelf_id = a_shelf) = 1,
+    'repeat place_film must not add a second row';
+
+  begin
+    perform public.place_film(b_shelf, 603);
+  exception when others then
+    null;  -- RLS on shelf_items insert is expected to raise
+  end;
+  assert (select count(*) from public.shelf_items where shelf_id = b_shelf) = 0,
+    'user A must not be able to place a film on user B private shelf';
+end $$;
+
 reset role;
 rollback;
 

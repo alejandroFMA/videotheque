@@ -156,3 +156,37 @@ $$;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- =====================================================================
+--  place_film · add a film to a shelf, at the end of the order
+--
+--  Resolves the position server-side. A prior client-side max() lets two
+--  tabs collide. On a repeat call the film is already there; the function
+--  returns its existing position rather than the discarded computed one.
+-- =====================================================================
+create or replace function public.place_film(p_shelf uuid, p_film integer)
+returns integer
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  result_pos integer;
+begin
+  insert into public.shelf_items (shelf_id, film_id, position)
+  values (
+    p_shelf,
+    p_film,
+    (select coalesce(max(position), 0) + 1
+       from public.shelf_items
+      where shelf_id = p_shelf)
+  )
+  on conflict (shelf_id, film_id) do nothing;
+
+  select position into result_pos
+    from public.shelf_items
+   where shelf_id = p_shelf and film_id = p_film;
+
+  return result_pos;
+end;
+$$;
