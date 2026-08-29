@@ -1,6 +1,6 @@
--- Schema verification. Run with:
+-- Schema verification. Run from the supabase/ directory with:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
---     -f supabase/tests/schema_checks.sql
+--     -f tests/schema_checks.sql
 -- Runs in one transaction and rolls back, so it is safe to re-run.
 
 \set ON_ERROR_STOP on
@@ -144,6 +144,36 @@ begin
   assert (select position from public.shelf_items
             where shelf_id = a_shelf and film_id = 1726) = 1,
     'reorder_shelf by a non-owner must not change positions';
+end $$;
+
+-- ---- as anon: the public /e/[slug] read path (items + joined films) ----
+-- shelf-a now holds 3 items (603, 24428, 1726). Anon must read them and the
+-- joined films rows through the "read items on a visible shelf" policy, whose
+-- shelves subquery is itself re-filtered by the shelves SELECT policy.
+set local role anon;
+set local "request.jwt.claims" = '';
+
+do $$
+declare
+  a_shelf uuid;
+  n int;
+begin
+  select id into a_shelf from public.shelves where slug = 'shelf-a';
+
+  select count(*) into n
+    from public.shelf_items si
+    join public.films f on f.id = si.film_id
+   where si.shelf_id = a_shelf;
+  assert n = 3,
+    'anon must read all 3 items + joined films on a public shelf (got ' || n || ')';
+
+  -- shelf-b is private: anon must not reach its items even via the join
+  select count(*) into n
+    from public.shelf_items si
+    join public.films f on f.id = si.film_id
+   where si.shelf_id = current_setting('test.shelf_b_id')::uuid;
+  assert n = 0,
+    'anon must not see a private shelf items via the films join (got ' || n || ')';
 end $$;
 
 reset role;

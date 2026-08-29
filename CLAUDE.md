@@ -23,7 +23,7 @@ src/
   components/          Shelf, Spine, SearchBar, FilmCase
   lib/                 supabase.ts, tmdb.ts, colors.ts
   styles/
-supabase/migrations/   schema.sql
+supabase/migrations/   <timestamp>_initial_schema.sql
 ```
 
 ## Database

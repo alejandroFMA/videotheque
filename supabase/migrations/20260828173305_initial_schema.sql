@@ -39,7 +39,10 @@ create table public.shelves (
   created_at timestamptz not null default now()
 );
 
-create index shelves_owner_idx on public.shelves (owner);
+-- one shelf per user (CLAUDE.md); also makes a double-fired signup trigger
+-- fail loudly instead of silently duplicating. The unique constraint's own
+-- btree index serves the owner-lookup path RLS uses.
+alter table public.shelves add constraint shelves_owner_key unique (owner);
 
 -- ---------------------------------------------------------------------
 --  shelf_items · which film sits on which shelf, and in what order
