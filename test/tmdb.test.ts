@@ -28,7 +28,8 @@ describe('toFilmRow', () => {
   it('returns director null when the crew has no Director', () => {
     expect(toFilmRow({ id: 1, title: 'x' }).director).toBeNull();
     expect(
-      toFilmRow({ id: 1, title: 'x', credits: { crew: [{ job: 'Producer', name: 'P' }] } }).director,
+      toFilmRow({ id: 1, title: 'x', credits: { crew: [{ job: 'Producer', name: 'P' }] } })
+        .director,
     ).toBeNull();
   });
 

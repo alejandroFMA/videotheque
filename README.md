@@ -44,9 +44,9 @@ Stop the stack with `supabase stop`.
 
 Set in `.env` locally (gitignored) and in the Vercel dashboard for deploys.
 
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `TMDB_ACCESS_TOKEN` | yes | TMDB v4 "API Read Access Token" (Bearer). Server-only — never sent to the browser. Get one at <https://www.themoviedb.org/settings/api>. |
+| Variable            | Required | Notes                                                                                                                                    |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `TMDB_ACCESS_TOKEN` | yes      | TMDB v4 "API Read Access Token" (Bearer). Server-only — never sent to the browser. Get one at <https://www.themoviedb.org/settings/api>. |
 
 Supabase URL / anon-key variables are added in the Supabase-layer cycle.
 
@@ -115,6 +115,23 @@ curl 'http://localhost:3000/api/tmdb?op=movie&id=603'
 The first returns a TMDB search page; the second a movie object with a `credits`
 field. Neither response contains the token.
 
+## Checks and gates
+
+```bash
+npm run lint            # ESLint flat config
+npm run format          # Prettier, write in place
+npm run format:check    # Prettier, verify only
+npm run typecheck       # tsc --noEmit
+```
+
+Commits are validated by commitlint — [Conventional Commits](https://www.conventionalcommits.org/),
+type one of `feat|fix|docs|test|refactor|chore|ci|perf|build|style|revert`. `git push`
+runs a pre-push hook: branch-name check, then lint, typecheck, test. GitHub Actions
+runs the same checks plus `npm run build` on every PR and on push to `main`.
+
+Working-practice rules live in `.claude/.rules/` — constants/types, git workflow,
+commit messages, comments, model selection.
+
 ## Project layout
 
 ```
@@ -125,6 +142,8 @@ src/
     api/tmdb.ts         TMDB proxy endpoint (wraps src/lib/tmdb-proxy.ts)
   components/           Shelf, Spine, SearchBar, FilmCase
   lib/                  tmdb.ts, tmdb-proxy.ts, supabase.ts, colors.ts
+  types/                cross-cutting interfaces and type aliases
+  constants/            cross-cutting constant values
   styles/
 supabase/
   migrations/           hand-authored schema history

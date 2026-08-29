@@ -1,0 +1,11 @@
+branch="$(git branch --show-current)"
+[ -z "$branch" ] && exit 0
+valid='^(main|(feat|fix|docs|test|refactor|chore|ci|perf|build|style|revert)/[a-z0-9._-]+)$'
+if ! printf '%s' "$branch" | grep -Eq "$valid"; then
+  printf 'pre-push: branch "%s" must be "main" or "<type>/<kebab-case>"\n' "$branch" >&2
+  exit 1
+fi
+
+npm run lint || exit 1
+npm run typecheck || exit 1
+npm test || exit 1

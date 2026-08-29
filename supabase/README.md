@@ -19,12 +19,12 @@ If the CLI is not on your PATH, prefix every command with `npx --yes`
 
 Local endpoints (defaults):
 
-| What | URL |
-| --- | --- |
-| Postgres | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` |
-| Studio (table + SQL UI) | http://127.0.0.1:54323 |
-| Inbucket (catches magic-link emails) | http://127.0.0.1:54324 |
-| REST / auth API | http://127.0.0.1:54321 |
+| What                                 | URL                                                       |
+| ------------------------------------ | --------------------------------------------------------- |
+| Postgres                             | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` |
+| Studio (table + SQL UI)              | http://127.0.0.1:54323                                    |
+| Inbucket (catches magic-link emails) | http://127.0.0.1:54324                                    |
+| REST / auth API                      | http://127.0.0.1:54321                                    |
 
 ## Browsing and querying
 
@@ -115,7 +115,7 @@ Local auth has no real email delivery — magic-link mails land in Inbucket
 - **Your own account:** create it with your real email
   (`alexfmarquez@gmail.com`) once auth is wired to the hosted project;
   there are no per-user database privileges to grant — access is entirely
-  RLS-driven from the `owner` column, so owning the row *is* the
+  RLS-driven from the `owner` column, so owning the row _is_ the
   privilege. The `postgres` role is the only elevated one and is for
   migrations and local debugging, not app use.
 

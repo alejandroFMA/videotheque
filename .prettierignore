@@ -1,0 +1,17 @@
+dist/
+.vercel/
+.astro/
+node_modules/
+coverage/
+package-lock.json
+
+# Vendored / generated / reference content - not ours to restyle
+.agents/
+docs/
+shelf-prototype.html
+supabase/.temp/
+
+# Tooling-managed config and byte-faithful test fixtures
+.claude/settings.json
+.mcp.json
+test/fixtures/
