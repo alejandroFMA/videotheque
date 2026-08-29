@@ -1,0 +1,21 @@
+{
+  "page": 1,
+  "total_pages": 5,
+  "total_results": 87,
+  "results": [
+    {
+      "id": 603,
+      "title": "The Matrix",
+      "release_date": "1999-03-30",
+      "poster_path": "/p96dm7sCMn4VYAStA6siNz30G1r.jpg",
+      "overview": "Set in the 22nd century..."
+    },
+    {
+      "id": 604,
+      "title": "The Matrix Reloaded",
+      "release_date": "2003-05-15",
+      "poster_path": "/9TGHDvWrqKBzwDxDodHYXEmOE6J.jpg",
+      "overview": "Six months after the events of The Matrix..."
+    }
+  ]
+}
