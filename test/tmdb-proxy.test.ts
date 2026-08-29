@@ -31,16 +31,28 @@ function failStatus(status: number) {
 }
 
 describe('handleTmdbRequest — validation', () => {
-  it('rejects non-GET with 405 and does not call fetch', async () => {
+  it('rejects non-GET with 405 + Allow: GET and does not call fetch', async () => {
     const ctx = makeCtx('op=search&query=matrix', { method: 'POST' });
     const res = await handleTmdbRequest(ctx);
     expect(res.status).toBe(405);
+    expect(res.headers.get('Allow')).toBe('GET');
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
     expect(ctx.fetch).not.toHaveBeenCalled();
+  });
+
+  it('treats HEAD like GET (not 405)', async () => {
+    const fetchMock = okJson(searchFixture);
+    const ctx = makeCtx('op=search&query=matrix', { method: 'HEAD', fetch: fetchMock });
+    const res = await handleTmdbRequest(ctx);
+    expect(res.status).not.toBe(405);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it('returns 400 { error: "unknown op" } when op is missing', async () => {
     const res = await handleTmdbRequest(makeCtx(''));
     expect(res.status).toBe(400);
+    expect(res.headers.get('Content-Type')).toContain('application/json');
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
     expect(await res.json()).toEqual({ error: 'unknown op' });
   });
 
@@ -85,6 +97,7 @@ describe('handleTmdbRequest — search', () => {
     expect(init.headers.Authorization).toBe('Bearer test-token');
 
     expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('application/json');
     expect(res.headers.get('Cache-Control')).toContain('s-maxage=600');
     expect(await res.json()).toEqual(searchFixture);
   });
@@ -99,6 +112,21 @@ describe('handleTmdbRequest — search', () => {
     const fetchMock = okJson(searchFixture);
     await handleTmdbRequest(makeCtx('op=search&query=matrix&page=3', { fetch: fetchMock }));
     expect(fetchMock.mock.calls[0][0]).toContain('page=3');
+  });
+
+  it('clamps page to TMDB max of 500', async () => {
+    const fetchMock = okJson(searchFixture);
+    await handleTmdbRequest(makeCtx('op=search&query=matrix&page=9999', { fetch: fetchMock }));
+    expect(fetchMock.mock.calls[0][0]).toContain('page=500');
+  });
+
+  it('never puts the token in the response body or headers', async () => {
+    const res = await handleTmdbRequest(
+      makeCtx('op=search&query=matrix', { fetch: okJson(searchFixture), token: 'SUPERSECRET-abc123' }),
+    );
+    const bodyText = await res.text();
+    expect(bodyText).not.toContain('SUPERSECRET-abc123');
+    expect([...res.headers.values()].join(' | ')).not.toContain('SUPERSECRET-abc123');
   });
 });
 
@@ -126,12 +154,31 @@ describe('handleTmdbRequest — upstream failures', () => {
 
   it('maps any other upstream status to 502', async () => {
     const ctx = makeCtx('op=search&query=matrix', { fetch: failStatus(500) });
-    expect((await handleTmdbRequest(ctx)).status).toBe(502);
+    const res = await handleTmdbRequest(ctx);
+    expect(res.status).toBe(502);
+    expect(res.headers.get('Content-Type')).toContain('application/json');
+    expect(await res.json()).toEqual({ error: 'tmdb upstream' });
   });
 
   it('maps a thrown fetch to 502', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
     const ctx = makeCtx('op=search&query=matrix', { fetch: fetchMock });
-    expect((await handleTmdbRequest(ctx)).status).toBe(502);
+    const res = await handleTmdbRequest(ctx);
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: 'tmdb upstream' });
+  });
+
+  it('maps a 200 with a non-JSON body to 502', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON');
+      },
+    });
+    const ctx = makeCtx('op=search&query=matrix', { fetch: fetchMock });
+    const res = await handleTmdbRequest(ctx);
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: 'tmdb upstream' });
   });
 });

@@ -139,7 +139,23 @@ Not every file exists yet — see the work order in `CLAUDE.md`.
 
 Pushed to Vercel. The `@astrojs/vercel` adapter turns the SSR routes into Vercel
 functions at build time. Set `TMDB_ACCESS_TOKEN` (and, later, the Supabase
-variables) in the Vercel project settings.
+variables) in the Vercel project settings. It is read at runtime via
+`astro:env/server` (`getSecret`), so rotating it needs no rebuild.
+
+### Follow-ups before a public deploy
+
+- **`/api/tmdb` is currently unauthenticated.** Abuse control (origin check +
+  rate limit) lands with the auth cycle. Do not deploy the proxy on a public URL
+  before then.
+
+### Security notes
+
+- `npm audit` reports a `path-to-regexp` ReDoS advisory in `@astrojs/vercel`'s
+  dependency tree (`@vercel/routing-utils`). It runs at **build time** on
+  developer-authored route patterns, never on request input, so it is not
+  exploitable here, and there is no forward fix compatible with Astro 7 (the only
+  `npm` remedy is a major downgrade to `@astrojs/vercel@8`). Do not run
+  `npm audit fix --force`. Re-check when `@astrojs/vercel` bumps the dependency.
 
 ## Attribution
 

@@ -1,3 +1,9 @@
+/**
+ * Browser-only. `searchFilms`/`getFilm` fetch the root-relative `/api/tmdb`,
+ * which only resolves in the browser — server code must not import this module.
+ * (Per CLAUDE.md, rendering a shelf never calls TMDB anyway.)
+ */
+
 export interface TmdbSearchResult {
   id: number;
   title: string;

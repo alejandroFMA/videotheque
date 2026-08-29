@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { getSecret } from 'astro:env/server';
 import { handleTmdbRequest } from '../../lib/tmdb-proxy';
 
 export const prerender = false;
@@ -9,6 +10,9 @@ export const ALL: APIRoute = ({ request }) =>
   handleTmdbRequest({
     searchParams: new URL(request.url).searchParams,
     method: request.method,
-    token: import.meta.env.TMDB_ACCESS_TOKEN ?? process.env.TMDB_ACCESS_TOKEN,
+    // `getSecret` is a real runtime read (astro:env, `access: 'secret'`): the
+    // token is never inlined into the build, so rotating it on Vercel needs no
+    // rebuild, and an empty value falls through to the handler's 500 branch.
+    token: getSecret('TMDB_ACCESS_TOKEN'),
     fetch,
   });
