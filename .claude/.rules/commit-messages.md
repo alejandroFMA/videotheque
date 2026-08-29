@@ -8,3 +8,7 @@
   changelog.
 - Keep the `Co-Authored-By:` and `Claude-Session:` trailers this repo
   already uses.
+- Pull request titles follow the same rule as the subject: a
+  Conventional-Commits line (`type(optional-scope): summary`), not a
+  free-form phrase. For a single-commit PR the title is that commit's
+  subject verbatim.

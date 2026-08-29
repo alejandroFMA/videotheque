@@ -54,7 +54,7 @@ Five files:
 | --- | --- |
 | `constants-and-types.md` | No magic values inline — a literal that carries meaning gets a name. Module-local types/constants stay beside their module in `src/lib/`. Cross-cutting ones go in `src/types/` (interfaces, type aliases) and `src/constants/` (values). |
 | `git-workflow.md` | Branches are `<type>/<kebab-description>` where `<type>` ∈ feat, fix, docs, test, refactor, chore, ci, perf, build, style, revert. `main` is the only unprefixed branch. |
-| `commit-messages.md` | Conventional Commits: `type(optional-scope): summary`. Subject one line, imperative, ≤ ~72 chars. Optional body of 1–2 sentences summarising what and why. Keep the existing `Co-Authored-By:` / `Claude-Session:` trailers. |
+| `commit-messages.md` | Conventional Commits: `type(optional-scope): summary`. Subject one line, imperative, ≤ ~72 chars. Optional body of 1–2 sentences summarising what and why. Keep the existing `Co-Authored-By:` / `Claude-Session:` trailers. PR titles follow the same rule (a single-commit PR's title is that commit's subject verbatim). |
 | `comments.md` | Comment only where the code is genuinely ambiguous or the *why* is not obvious from the code. Explain *why*, never *what*. No comments that restate the code; no commented-out code. JSDoc only on exported API whose signature does not speak for itself. |
 | `model-selection.md` | Pick the lightest model that fits: planning / orchestration / architecture / whole-branch review → heavy (Opus); multi-file features, integration, debugging, non-trivial diff review → Sonnet; transcription from a complete spec, single-file edits, config tweaks, running commands → Haiku. When between tiers, start lighter and escalate on a stall. |
 
