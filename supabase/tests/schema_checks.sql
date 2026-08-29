@@ -20,14 +20,15 @@ values
    'authenticated', 'authenticated', 'b@test.dev', '',
    '{}', '{}', now(), now());
 
--- handle_new_user should have created exactly one shelf per user
+-- handle_new_user seeds exactly one shelf for each new user (a user may
+-- then create more; see the multi-shelf check further down)
 do $$
 declare n int;
 begin
   select count(*) into n from public.shelves
    where owner in ('11111111-1111-1111-1111-111111111111',
                    '22222222-2222-2222-2222-222222222222');
-  assert n = 2, 'handle_new_user did not create one shelf per user (got ' || n || ')';
+  assert n = 2, 'handle_new_user did not seed one shelf per new user (got ' || n || ')';
 end $$;
 
 update public.shelves set is_public = true,  slug = 'shelf-a'
@@ -103,6 +104,29 @@ begin
   end;
   assert blocked,
     'user A must be blocked by RLS from placing a film on user B private shelf';
+end $$;
+
+-- ---- a user may own many shelves; name + accent_color are writable ----
+do $$
+declare
+  new_shelf uuid;
+  got_name  text;
+  got_color text;
+  n int;
+begin
+  insert into public.shelves (owner, slug, name, accent_color)
+  values ('11111111-1111-1111-1111-111111111111',
+          'shelf-a2', 'Terror', 'hsl(270 50% 30%)')
+  returning id into new_shelf;
+
+  select count(*) into n from public.shelves
+   where owner = '11111111-1111-1111-1111-111111111111';
+  assert n = 2, 'user A must be able to own more than one shelf (got ' || n || ')';
+
+  select name, accent_color into got_name, got_color
+    from public.shelves where id = new_shelf;
+  assert got_name  = 'Terror',            'shelf name must be writable by its owner';
+  assert got_color = 'hsl(270 50% 30%)',  'accent_color must be writable by its owner';
 end $$;
 
 -- ---- reorder_shelf, as user A -----------------------------------

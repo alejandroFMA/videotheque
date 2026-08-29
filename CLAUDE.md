@@ -1,8 +1,8 @@
 # Videothèque
 
-A film shelf. Each user owns one shelf and fills it by searching TMDB. Films are
-drawn as case spines standing on a wooden board, in an order the owner sets by
-dragging. Visual reference: thecriterioncloset.com
+A film shelf. Each user owns one or more themed shelves and fills them by
+searching TMDB. Films are drawn as case spines standing on a wooden board, in an
+order the owner sets by dragging. Visual reference: thecriterioncloset.com
 
 ## Stack
 
@@ -17,7 +17,7 @@ dragging. Visual reference: thecriterioncloset.com
 ```
 src/
   pages/
-    index.astro        own shelf, requires a session
+    index.astro        own shelves, requires a session
     e/[slug].astro     anyone's public shelf, no login
     api/tmdb.ts        TMDB proxy
   components/          Shelf, Spine, SearchBar, FilmCase
@@ -33,8 +33,10 @@ Three tables, normalised from the start. Full SQL with policies lives in
 
 - `films`: global TMDB cache. Primary key is the TMDB id. Filled the first time
   anyone adds that film, written by that user's browser with the anon key.
-- `shelves`: one shelf per user. `slug` drives the public URL, `is_public`
-  controls access without a session.
+- `shelves`: a user owns one or more themed shelves; sign-up seeds the first.
+  `name` labels a shelf, `accent_color` tints it, `slug` drives the public URL,
+  `is_public` controls access without a session. The ~20-films-per-shelf cap is
+  a client concern, not a database constraint.
 - `shelf_items`: composite primary key (shelf_id, film_id). `position` is the
   display order within the shelf: `place_film` sets it when the film is added,
   `reorder_shelf` rewrites it on drag-and-drop. It is never shown, and gaps

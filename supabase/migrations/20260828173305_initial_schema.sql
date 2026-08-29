@@ -25,24 +25,26 @@ create table public.films (
 );
 
 -- ---------------------------------------------------------------------
---  shelves · one shelf per person
+--  shelves · themed collections, many per person
 --
---  slug drives the public URL /e/<slug>; is_public gates access without
---  a session. Kept separate from name so a rename does not break links.
+--  A user owns one or more shelves; sign-up seeds the first one. Each is a
+--  themed strip: name is its label ('Terror'), accent_color tints its
+--  chrome. slug drives the public URL /e/<slug>; is_public gates access
+--  without a session. Kept separate from name so a rename does not break
+--  links. The ~20-films-per-shelf cap is a client concern, not enforced here.
 -- ---------------------------------------------------------------------
 create table public.shelves (
-  id         uuid primary key default gen_random_uuid(),
-  owner      uuid not null references auth.users on delete cascade,
-  name       text not null default 'My shelf',
-  slug       text not null unique,
-  is_public  boolean not null default true,
-  created_at timestamptz not null default now()
+  id           uuid primary key default gen_random_uuid(),
+  owner        uuid not null references auth.users on delete cascade,
+  name         text not null default 'My shelf',
+  slug         text not null unique,
+  accent_color text,                       -- hsl(), null = client default
+  is_public    boolean not null default true,
+  created_at   timestamptz not null default now()
 );
 
--- one shelf per user (CLAUDE.md); also makes a double-fired signup trigger
--- fail loudly instead of silently duplicating. The unique constraint's own
--- btree index serves the owner-lookup path RLS uses.
-alter table public.shelves add constraint shelves_owner_key unique (owner);
+-- a user owns many shelves; index the owner lookup, no unique constraint.
+create index shelves_owner_idx on public.shelves (owner);
 
 -- ---------------------------------------------------------------------
 --  shelf_items · which film sits on which shelf, and in what order
