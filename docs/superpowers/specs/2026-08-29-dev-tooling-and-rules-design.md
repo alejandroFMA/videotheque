@@ -111,6 +111,11 @@ convention, not a linted one).
 `actions/setup-node` with `cache: npm`. Action majors pinned
 (`checkout@v4`, `setup-node@v4`).
 
+A second workflow, `.github/workflows/pr-title.yml`, runs
+`amannn/action-semantic-pull-request@v5` on PR open/edit/sync/reopen to
+enforce that the PR title is a Conventional-Commits line with a type from
+the same list as `commitlint`.
+
 ### 5. Placeholder folders are real empty modules
 
 `src/types/index.ts` and `src/constants/index.ts` each contain only

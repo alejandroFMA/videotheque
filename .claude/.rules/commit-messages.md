@@ -11,4 +11,4 @@
 - Pull request titles follow the same rule as the subject: a
   Conventional-Commits line (`type(optional-scope): summary`), not a
   free-form phrase. For a single-commit PR the title is that commit's
-  subject verbatim.
+  subject verbatim. CI enforces this (the `PR title` workflow).
