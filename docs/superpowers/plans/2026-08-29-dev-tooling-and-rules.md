@@ -4,7 +4,7 @@
 
 **Goal:** Add written working-practice rules plus the ESLint/Prettier/Husky/CI tooling that enforces the mechanical parts.
 
-**Architecture:** Four independent slices — rule docs, linting+formatting, git hooks, CI+PR-template. No application logic changes; the only `src/**` edits are two new empty modules and whatever `prettier --write` / `eslint --fix` reflow.
+**Architecture:** Independent slices — rule docs, linting+formatting, git hooks, CI+PR-template, and a model-selection rule (Task 5, added later). No application logic changes; the only `src/**` edits are two new empty modules and whatever `prettier --write` / `eslint --fix` reflow.
 
 **Tech Stack:** ESLint 10 (flat config), typescript-eslint 8, Prettier 3, Husky 9, commitlint 21, lint-staged 17, GitHub Actions.
 
@@ -495,6 +495,81 @@ git commit -m "ci: run format, lint, typecheck, test and build on push and PR"
 
 ---
 
+### Task 5: Model-selection rule
+
+**Files:**
+- Create: `.claude/.rules/model-selection.md`
+- Modify: `CLAUDE.md` (one line added to the `## Ways of working` section)
+
+**Interfaces:**
+- Consumes: the `## Ways of working` section created in Task 1.
+- Produces: nothing.
+
+Added after the plan's original four tasks, at the user's request. No
+automated test — verified by file existence and a `grep`.
+
+- [ ] **Step 1: Create `.claude/.rules/model-selection.md`**
+
+```markdown
+# Model selection
+
+Pick the lightest model that fits the work:
+
+- **Planning and orchestration** — writing specs and implementation plans,
+  architecture and design decisions, coordinating multi-step work, and
+  whole-branch or otherwise high-stakes review — use a heavy model (Opus).
+- **Medium tasks** — multi-file features, integration work, debugging, and
+  reviewing a non-trivial diff — use Sonnet.
+- **Purely mechanical work** — transcribing code from a complete spec,
+  single-file edits, config tweaks, and running commands to report their
+  output — use Haiku.
+
+When unsure between two tiers, start with the lighter one and escalate only
+if it stalls.
+```
+
+- [ ] **Step 2: Add the import to `CLAUDE.md`**
+
+In the `## Ways of working` section, add a fifth line immediately after
+`@.claude/.rules/comments.md`:
+
+```
+@.claude/.rules/model-selection.md
+```
+
+The section then reads:
+
+```markdown
+## Ways of working
+
+@.claude/.rules/constants-and-types.md
+@.claude/.rules/git-workflow.md
+@.claude/.rules/commit-messages.md
+@.claude/.rules/comments.md
+@.claude/.rules/model-selection.md
+```
+
+- [ ] **Step 3: Verify**
+
+Run:
+```bash
+cat .claude/.rules/model-selection.md
+grep -c "@.claude/.rules/" CLAUDE.md   # expect 5
+```
+Expected: the file prints; the count is 5.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add .claude/.rules/model-selection.md CLAUDE.md
+git commit -m "docs: add model-selection rule"
+```
+The commit-msg hook (from Task 3) runs — `docs:` is a valid type. `pre-commit`
+runs `lint-staged`; the two files are `.md`, so only `prettier --write` runs
+on them.
+
+---
+
 ## Self-Review
 
 **1. Spec coverage**
@@ -521,6 +596,7 @@ git commit -m "ci: run format, lint, typecheck, test and build on push and PR"
 | `lint-staged` as a `package.json` key | Task 3 (step 1) |
 | CI triggers + Node 24 + step order | Task 4 (step 1) |
 | PR template four sections | Task 4 (step 2) |
+| `.claude/.rules/model-selection.md` (Opus/Sonnet/Haiku tiering) + 5th `@`-import | Task 5 |
 | No `src/**` change beyond the two `index.ts` + reflow | Task 2 (step 8 caveat), Global Constraints |
 
 No gaps.

@@ -18,7 +18,7 @@ declarations. No application code changes beyond what the formatter and
 
 In scope:
 
-- `.claude/.rules/` — four rule files, imported from `CLAUDE.md`.
+- `.claude/.rules/` — five rule files, imported from `CLAUDE.md`.
 - ESLint 10 flat config + Prettier, with scripts.
 - Husky 9 + commitlint + lint-staged; commit-msg / pre-commit / pre-push hooks.
 - `.github/workflows/ci.yml`.
@@ -48,7 +48,7 @@ Claude Code does not auto-load `.claude/.rules/`. `CLAUDE.md` gains a short
 `## Ways of working` section that `@`-imports each rule file, which is what
 makes them load. The rule files are also readable on their own for humans.
 
-Four files:
+Five files:
 
 | File | Rule |
 | --- | --- |
@@ -56,6 +56,7 @@ Four files:
 | `git-workflow.md` | Branches are `<type>/<kebab-description>` where `<type>` ∈ feat, fix, docs, test, refactor, chore, ci, perf, build, style, revert. `main` is the only unprefixed branch. |
 | `commit-messages.md` | Conventional Commits: `type(optional-scope): summary`. Subject one line, imperative, ≤ ~72 chars. Optional body of 1–2 sentences summarising what and why. Keep the existing `Co-Authored-By:` / `Claude-Session:` trailers. |
 | `comments.md` | Comment only where the code is genuinely ambiguous or the *why* is not obvious from the code. Explain *why*, never *what*. No comments that restate the code; no commented-out code. JSDoc only on exported API whose signature does not speak for itself. |
+| `model-selection.md` | Pick the lightest model that fits: planning / orchestration / architecture / whole-branch review → heavy (Opus); multi-file features, integration, debugging, non-trivial diff review → Sonnet; transcription from a complete spec, single-file edits, config tweaks, running commands → Haiku. When between tiers, start lighter and escalate on a stall. |
 
 ### 2. ESLint 10 flat config, non-type-checked, Prettier for formatting
 
@@ -131,6 +132,7 @@ with reflow noise. `eslint --fix` output (if any) rides in the same commit.
   git-workflow.md
   commit-messages.md
   comments.md
+  model-selection.md
 .github/
   workflows/ci.yml
   pull_request_template.md
@@ -202,9 +204,10 @@ Tooling is verified by running it, not by unit tests.
 
 ## Acceptance criteria
 
-- `.claude/.rules/` holds the four files; `CLAUDE.md` `@`-imports all four
+- `.claude/.rules/` holds the five files; `CLAUDE.md` `@`-imports all five
   under `## Ways of working`.
 - `comments.md` states the ambiguity-only commenting rule.
+- `model-selection.md` states the Opus / Sonnet / Haiku tiering by task kind.
 - ESLint + Prettier installed and configured; the six new scripts run and
   pass on the current tree.
 - Husky installed; the three hooks exist and behave as in Testing.
