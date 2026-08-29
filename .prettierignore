@@ -1,0 +1,12 @@
+dist/
+.vercel/
+.astro/
+node_modules/
+coverage/
+package-lock.json
+
+# Vendored / generated / reference content - not ours to restyle
+.agents/
+docs/
+shelf-prototype.html
+supabase/.temp/
