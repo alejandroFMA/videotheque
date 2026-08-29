@@ -2,3 +2,4 @@
 node_modules/
 .superpowers/
 .serena/
+.claude/settings.local.json
