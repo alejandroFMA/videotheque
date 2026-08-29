@@ -1,0 +1,3 @@
+# Husky hooks must be LF so /bin/sh can run them on any platform
+.husky/** text eol=lf
+*.sh text eol=lf
