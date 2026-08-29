@@ -1,5 +1,14 @@
 # Database Foundation Implementation Plan
 
+> **Superseded in part (2026-08-29):** during branch finish the data model
+> changed from *one shelf per user* to *many themed shelves per user*
+> (`shelves` gained `accent_color`; no `unique(owner)`). This file is a
+> frozen planning artifact and still describes the old model in places
+> (Tech Stack notes, the embedded schema/harness copies, "one shelf per
+> person" comments). The authoritative sources are the migration
+> (`supabase/migrations/20260828173305_initial_schema.sql`), the design
+> spec, and `CLAUDE.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the draft `schema.sql` into a versioned Supabase migration with a hardened `place_film`, a new `reorder_shelf`, one RLS fix, a SQL verification script, and a matching `CLAUDE.md`.
