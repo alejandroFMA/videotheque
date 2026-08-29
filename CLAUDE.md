@@ -9,7 +9,12 @@ order the owner sets by dragging. Visual reference: thecriterioncloset.com
 - Astro with the Vercel adapter, server-side rendering
 - Supabase: Postgres, magic-link auth, row level security
 - TMDB as the data source, always through our own proxy
-- No UI framework. Astro components and plain JavaScript.
+- No UI framework. Astro components and plain JavaScript for the app shell.
+- Runtime libraries are allowed only with a written justification: what it
+  buys, its cost in shipped KB and complexity, and why plain JS will not do.
+  Accepted so far: **Three.js**, for the pulled-out 3D film case only (the
+  shelf itself stays CSS/DOM). See
+  `docs/superpowers/specs/2026-08-29-shelf-visual-direction-design.md`.
 - Deployed on Vercel
 
 ## Structure
