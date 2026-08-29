@@ -34,6 +34,7 @@ supabase/migrations/   <timestamp>_initial_schema.sql
 @.claude/.rules/git-workflow.md
 @.claude/.rules/commit-messages.md
 @.claude/.rules/comments.md
+@.claude/.rules/model-selection.md
 
 ## Database
 
