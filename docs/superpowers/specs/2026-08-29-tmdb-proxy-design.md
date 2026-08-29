@@ -62,12 +62,16 @@ The endpoint exposes two named operations selected by `?op=`:
 
 | `op`     | required params      | upstream call                                                            |
 | -------- | -------------------- | ----------------------------------------------------------------------- |
-| `search` | `query`              | `GET /3/search/movie?query=<q>&page=<p>&include_adult=false`            |
+| `search` | `query`              | `GET /3/search/movie?query=<q>&page=<p>&include_adult=true`             |
 | `movie`  | `id` (integer > 0)   | `GET /3/movie/<id>?append_to_response=credits`                          |
 
 No mechanism lets the client name an arbitrary TMDB path. Adding an operation
 is a deliberate code change. `append_to_response=credits` is the extension
 point for richer `movie` data later (`credits,keywords,videos,...`).
+
+`include_adult=true` is hardcoded: the collection is for adults and needs to
+reach adult-classified titles (e.g. Japanese pinku cinema) that TMDB filters
+out by default. It is not a client-controllable parameter.
 
 ### 3. Logic lives in a plain module, not the `.astro` file
 
