@@ -26,6 +26,9 @@ In scope:
 - Vitest set up via `getViteConfig()`, with committed TMDB fixtures.
 - `.env` gains `TMDB_ACCESS_TOKEN`; `.env.example` is committed.
 - `src/pages/index.astro` placeholder.
+- Rewrite the root `README.md`: project description, and how-to guides for
+  running the app, running the local Supabase stack, authoring a migration
+  locally, and propagating it to the hosted project.
 
 Out of scope (later sub-projects):
 
@@ -313,6 +316,84 @@ curl 'http://localhost:3000/api/tmdb?op=movie&id=603'
 
 Requires a real `TMDB_ACCESS_TOKEN` in `.env`.
 
+## Root `README.md`
+
+The root `README.md` is currently a two-line stub. Replace it with a real
+project readme. It is the entry point for someone cloning the repo; it holds
+the overview and the run/DB workflow, and links to `supabase/README.md` for the
+deep database reference (psql cheatsheet, RLS role-switching) rather than
+duplicating it.
+
+Sections, in order:
+
+1. **Title + one-paragraph description.** What Videothèque is: a film-shelf app
+   where each user owns themed shelves of films drawn as case spines on a
+   wooden board, ordered by drag-and-drop, filled by searching TMDB. Public
+   shelves are shareable without a login. Visual reference:
+   thecriterioncloset.com.
+
+2. **Stack.** Bullet list: Astro + Vercel adapter (SSR); Supabase (Postgres,
+   magic-link auth, RLS); TMDB as data source, always via `/api/tmdb`; no UI
+   framework; deployed on Vercel.
+
+3. **Prerequisites.** Node (version from `.nvmrc` or "Node 24+"), npm, Docker
+   Desktop (for the local Supabase stack), the Supabase CLI (`npx supabase` if
+   not installed globally).
+
+4. **Getting started.**
+   ```bash
+   npm install
+   cp .env.example .env      # then fill TMDB_ACCESS_TOKEN
+   supabase start            # boots local Postgres + Auth (Docker)
+   npm run dev               # http://localhost:3000
+   ```
+   Note the dev server port is 3000 to match `supabase/config.toml`
+   `site_url`. Point out `supabase status` for local URLs/keys and Inbucket
+   (http://127.0.0.1:54324) for magic-link emails.
+
+5. **Environment variables.** Table: `TMDB_ACCESS_TOKEN` (required, server-only,
+   TMDB v4 read token). Supabase URL/anon-key vars are listed as "added in the
+   Supabase-layer cycle" so the table has a home but is not prematurely filled.
+
+6. **Database — local workflow.** The project uses **imperative, hand-authored
+   migrations** in `supabase/migrations/` (`config.toml` sets
+   `[db.migrations] schema_paths = []`, so no declarative schema). Steps:
+   - Start / reset: `supabase start`, `supabase db reset` (replays every
+     migration + `supabase/seed.sql` if present).
+   - Author a change: `supabase migration new <slug>` creates a timestamped
+     empty file; write the SQL by hand (follow the style of the existing
+     migrations — header comment explaining the why, idempotent DDL where
+     reasonable).
+   - Iterate: `supabase db reset` after each edit to confirm it applies clean
+     from scratch. For ad-hoc exploration use `supabase db query` / MCP
+     `execute_sql`; do not use `apply_migration` for local iteration.
+   - Check: `supabase db advisors` (or MCP `get_advisors`) before committing;
+     fix what it flags.
+
+7. **Database — propagate to hosted.** The linked project ref is in
+   `supabase/config.toml` (`project_id`). Steps:
+   - One-time: `supabase login`, `supabase link --project-ref <ref>`.
+   - `supabase migration list` shows local vs remote drift.
+   - `supabase db push` applies pending migrations to the hosted project.
+   - Note that hosted `auth.users` is separate from local — users do not sync
+     (link to `supabase/README.md` "Users").
+
+8. **Testing.** `npm test` (Vitest, no network/token needed), `npm run
+   test:watch`. One line on the manual TMDB smoke test pointing at the section
+   above.
+
+9. **Project layout.** Short tree or list mirroring `CLAUDE.md` "Structure".
+
+10. **Deployment.** One or two sentences: pushed to Vercel, the `@astrojs/vercel`
+    adapter builds the SSR functions; env vars set in the Vercel dashboard.
+
+11. **Attribution.** TMDB terms: "This product uses the TMDB API but is not
+    endorsed or certified by TMDB." plus the non-commercial-licence note from
+    `CLAUDE.md` Constraints.
+
+Keep it skimmable — commands in fenced blocks, prose tight. Do not restate the
+psql cheatsheet or RLS role-switching from `supabase/README.md`; link to it.
+
 ## Acceptance criteria
 
 - `npm install && npm run build` succeeds.
@@ -324,3 +405,7 @@ Requires a real `TMDB_ACCESS_TOKEN` in `.env`.
 - `.env.example` lists `TMDB_ACCESS_TOKEN`; `.gitignore` covers `dist/` and
   `.vercel/`.
 - `src/pages/index.astro` renders a placeholder without error.
+- The root `README.md` covers all 11 sections above; every command in it runs
+  as written from a clean clone (the hosted-only steps read correctly even
+  where they cannot be executed offline); it links to `supabase/README.md`
+  rather than duplicating its psql/RLS content.
