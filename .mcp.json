@@ -21,13 +21,16 @@
       "command": "npx",
       "args": [
         "-y",
+        "dotenv-cli",
+        "-e",
+        ".env",
+        "--",
+        "npx",
+        "-y",
         "@supabase/mcp-server-supabase@latest",
         "--read-only",
         "--project-ref=ivxozrhfyjsoxdstzagh"
-      ],
-      "env": {
-        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
-      }
+      ]
     },
     "playwright": {
       "command": "npx",
