@@ -1,59 +1,59 @@
 -- =====================================================================
---  Videotheque · initial schema
---  Run top to bottom in the Supabase SQL editor.
+--  Videothèque · initial schema
 -- =====================================================================
-
 
 -- ---------------------------------------------------------------------
 --  films · global TMDB cache
 --
---  One row per film, shared by every shelf. Filled the first time anyone
---  adds it. From then on, rendering a shelf never calls TMDB.
---
---  The primary key is the TMDB id rather than our own uuid: it is
---  already unique and stable, and it saves a lookup table.
+--  One row per film, shared by every shelf. Written by the client with
+--  the anon key the first time anyone adds it. spine_color / spine_dark
+--  are computed in that user's browser from the public poster and stored
+--  here; they are never recomputed afterwards. Rendering a shelf reads
+--  only from this table, never from TMDB.
 -- ---------------------------------------------------------------------
 create table public.films (
   id             integer primary key,          -- TMDB id
   title          text    not null,
   original_title text,
   year           smallint,
-  poster_path    text,                         -- relative path, no host
+  poster_path    text,                          -- relative path, no host
   overview       text,
   director       text,
-  spine_color    text    not null,             -- precomputed hsl()
-  spine_dark     boolean not null default false, -- dark text on the spine
+  spine_color    text    not null,              -- precomputed hsl()
+  spine_dark     boolean not null default false,
   fetched_at     timestamptz not null default now()
 );
 
-
 -- ---------------------------------------------------------------------
---  shelves · one shelf per person, for now
+--  shelves · themed collections, many per person
 --
---  The slug is what goes in the public URL: /e/olivia. Kept separate
---  from the name so a shelf can be renamed without breaking links that
---  are already out there.
+--  A user owns one or more shelves; sign-up seeds the first one. Each is a
+--  themed strip: name is its label ('Terror'), accent_color tints its
+--  chrome. slug drives the public URL /e/<slug>; is_public gates access
+--  without a session. Kept separate from name so a rename does not break
+--  links. The ~20-films-per-shelf cap is a client concern, not enforced here.
 -- ---------------------------------------------------------------------
 create table public.shelves (
-  id         uuid primary key default gen_random_uuid(),
-  owner      uuid not null references auth.users on delete cascade,
-  name       text not null default 'My shelf',
-  slug       text not null unique,
-  is_public  boolean not null default true,
-  created_at timestamptz not null default now()
+  id           uuid primary key default gen_random_uuid(),
+  owner        uuid not null references auth.users on delete cascade,
+  name         text not null default 'My shelf',
+  slug         text not null unique,
+  accent_color text,                       -- hsl(), null = client default
+  is_public    boolean not null default true,
+  created_at   timestamptz not null default now()
 );
 
+-- a user owns many shelves; index the owner lookup, no unique constraint.
 create index shelves_owner_idx on public.shelves (owner);
 
-
 -- ---------------------------------------------------------------------
---  shelf_items · which film sits on which shelf
+--  shelf_items · which film sits on which shelf, and in what order
 --
---  The composite primary key gives "you cannot add the same film twice"
---  for free: the duplicate insert fails in the database, so the client
---  never has to check first.
---
---  position is the spine number. On insert: max(position) + 1.
+--  The composite primary key gives "cannot add the same film twice" for
+--  free. position is the display order within one shelf: place_film sets
+--  it when the film is added (appended at the end), reorder_shelf
+--  rewrites it on drag-and-drop. It is not a spine number, it is never
+--  shown, and gaps left by deletion are not compacted.
 -- ---------------------------------------------------------------------
 create table public.shelf_items (
   shelf_id  uuid    not null references public.shelves on delete cascade,
@@ -65,26 +65,18 @@ create table public.shelf_items (
 
 create index shelf_items_order_idx on public.shelf_items (shelf_id, position);
 
-
 -- =====================================================================
 --  Row level security
 --
---  With this in place the browser can talk straight to the database
---  using the anon key. Postgres filters every query by who you are.
---  No hand-written API layer is needed to police permissions.
---
---  auth.uid() is wrapped in (select ...) on purpose: that way Postgres
---  evaluates it once per query instead of once per row.
+--  With this in place the browser talks straight to the database with
+--  the anon key; Postgres filters every query by who you are.
 -- =====================================================================
-
 alter table public.films       enable row level security;
 alter table public.shelves     enable row level security;
 alter table public.shelf_items enable row level security;
 
-
--- films: open catalogue for reads, only signed-in users may cache.
--- Nothing edits or deletes films from the client; the proxy function
--- does that with the service role key.
+-- films: open catalogue for reads, signed-in users may cache new rows.
+-- Nothing updates or deletes films from the client.
 create policy "anyone reads the catalogue"
   on public.films for select
   using (true);
@@ -92,7 +84,6 @@ create policy "anyone reads the catalogue"
 create policy "signed-in users cache new films"
   on public.films for insert to authenticated
   with check (true);
-
 
 -- shelves: you see public ones and your own; you only touch your own.
 create policy "public or own shelves"
@@ -112,7 +103,6 @@ create policy "delete your own shelf"
   on public.shelves for delete to authenticated
   using (owner = (select auth.uid()));
 
-
 -- shelf_items: permission is inherited from the parent shelf.
 create policy "read items on a visible shelf"
   on public.shelf_items for select
@@ -129,9 +119,15 @@ create policy "place films on your own shelf"
     where s.id = shelf_id and s.owner = (select auth.uid())
   ));
 
+-- both using and with check, so a row cannot be moved onto a shelf you
+-- do not own.
 create policy "reorder your own shelf"
   on public.shelf_items for update to authenticated
   using (exists (
+    select 1 from public.shelves s
+    where s.id = shelf_id and s.owner = (select auth.uid())
+  ))
+  with check (exists (
     select 1 from public.shelves s
     where s.id = shelf_id and s.owner = (select auth.uid())
   ));
@@ -143,12 +139,8 @@ create policy "remove films from your own shelf"
     where s.id = shelf_id and s.owner = (select auth.uid())
   ));
 
-
 -- =====================================================================
 --  Give every new user a shelf on sign-up
---
---  Without this, a new user signs in and has nowhere to put anything.
---  security definer because the trigger runs before a session exists.
 -- =====================================================================
 create or replace function public.handle_new_user()
 returns trigger
@@ -160,7 +152,6 @@ begin
   insert into public.shelves (owner, slug)
   values (
     new.id,
-    -- provisional slug from the uuid; the user can change it later
     substr(replace(new.id::text, '-', ''), 1, 10)
   );
   return new;
@@ -171,45 +162,60 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
-
 -- =====================================================================
---  Place a film on a shelf
+--  place_film · add a film to a shelf, at the end of the order
 --
---  Resolves the spine number server-side. Computing it in the client
---  with a prior max() lets two open tabs claim the same number.
+--  Resolves the position server-side. A prior client-side max() lets two
+--  tabs collide. On a repeat call the film is already there; the function
+--  returns its existing position rather than the discarded computed one.
 -- =====================================================================
 create or replace function public.place_film(p_shelf uuid, p_film integer)
 returns integer
 language plpgsql
-security invoker          -- respects the policies above
+security invoker
 set search_path = ''
 as $$
 declare
-  next_pos integer;
+  result_pos integer;
 begin
-  select coalesce(max(position), 0) + 1
-    into next_pos
-    from public.shelf_items
-   where shelf_id = p_shelf;
-
   insert into public.shelf_items (shelf_id, film_id, position)
-  values (p_shelf, p_film, next_pos)
+  values (
+    p_shelf,
+    p_film,
+    (select coalesce(max(position), 0) + 1
+       from public.shelf_items
+      where shelf_id = p_shelf)
+  )
   on conflict (shelf_id, film_id) do nothing;
 
-  return next_pos;
+  select position into result_pos
+    from public.shelf_items
+   where shelf_id = p_shelf and film_id = p_film;
+
+  return result_pos;
 end;
 $$;
 
-
 -- =====================================================================
---  Reading a whole shelf from the client, in one call:
+--  reorder_shelf · apply a drag-and-drop ordering in one call
 --
---    const { data } = await supabase
---      .from('shelf_items')
---      .select('position, films(*)')
---      .eq('shelf_id', id)
---      .order('position');
---
---  PostgREST follows the foreign key and nests the film inside each
---  item. The join is not written by hand.
+--  p_order is the full list of film_id for the shelf, in the desired
+--  order. position becomes the 1-based index within that list. Runs as
+--  the caller, so the UPDATE is filtered by the shelf_items update
+--  policy: a non-owner updates nothing and gets no error. film_id values
+--  omitted from p_order keep their old position.
 -- =====================================================================
+create or replace function public.reorder_shelf(p_shelf uuid, p_order integer[])
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  update public.shelf_items si
+     set position = ord.idx::integer
+    from unnest(p_order) with ordinality as ord(film_id, idx)
+   where si.shelf_id = p_shelf
+     and si.film_id  = ord.film_id;
+end;
+$$;

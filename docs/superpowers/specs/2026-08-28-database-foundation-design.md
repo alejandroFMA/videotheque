@@ -19,7 +19,8 @@ In scope:
 
 - Move `schema.sql` into a versioned Supabase migration.
 - Revise the schema: drop the visible spine-number concept, add drag-and-drop
-  ordering, tighten one RLS policy, harden `place_film`.
+  ordering, tighten one RLS policy, harden `place_film`, add `shelves.accent_color`
+  and confirm a user may own many shelves.
 - Add a `reorder_shelf` function.
 - Set up the Supabase CLI workflow (init, link, `db push`).
 - Update `CLAUDE.md` so it matches the decisions below.
@@ -113,10 +114,15 @@ Global TMDB cache, primary key is the TMDB id, `spine_color` and `spine_dark`
 precomputed and stored. RLS: anyone reads, authenticated users insert
 (`with check (true)`), no update or delete from the client.
 
-### `shelves` — unchanged
+### `shelves` — one delta
 
-One per user, `slug` drives the public URL, `is_public` gates sessionless
-access. RLS unchanged.
+A user owns one or more themed shelves (sign-up seeds the first). `name` labels
+a shelf, `slug` drives the public URL, `is_public` gates sessionless access. RLS
+is unchanged: every policy already filters by `owner = auth.uid()` with no
+cardinality assumption, so it holds for many shelves per owner as-is. `owner`
+keeps a plain (non-unique) index. Delta: add `accent_color text` (nullable,
+`hsl()`, null means the client picks a default) for per-shelf tinting. The
+~20-films-per-shelf cap is a client concern, not a database constraint.
 
 ### `shelf_items` — documentation only
 
@@ -221,7 +227,9 @@ a local instance if Docker is added later). Covers:
   returns the existing `position` and inserts nothing.
 - `reorder_shelf` permutes `position` for the owner and is a no-op for a
   non-owner.
-- `handle_new_user` creates exactly one shelf for a new `auth.users` row.
+- `handle_new_user` seeds exactly one shelf for a new `auth.users` row.
+- A user can create additional shelves; `name` and `accent_color` are writable
+  by the shelf's owner.
 
 Run manually after `supabase db push`. Not wired into CI in this sub-project.
 
