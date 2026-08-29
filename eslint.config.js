@@ -4,7 +4,20 @@ import astro from 'eslint-plugin-astro';
 import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
-  { ignores: ['dist/', '.vercel/', '.astro/', 'node_modules/', 'coverage/'] },
+  {
+    ignores: [
+      'dist/',
+      '.vercel/',
+      '.astro/',
+      'node_modules/',
+      'coverage/',
+      '.agents/',
+      'docs/',
+      '.superpowers/',
+      '.serena/',
+      '.claude/skills/',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...astro.configs.recommended,
