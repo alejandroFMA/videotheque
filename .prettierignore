@@ -10,3 +10,8 @@ package-lock.json
 docs/
 shelf-prototype.html
 supabase/.temp/
+
+# Tooling-managed config and byte-faithful test fixtures
+.claude/settings.json
+.mcp.json
+test/fixtures/

@@ -122,7 +122,10 @@ describe('handleTmdbRequest — search', () => {
 
   it('never puts the token in the response body or headers', async () => {
     const res = await handleTmdbRequest(
-      makeCtx('op=search&query=matrix', { fetch: okJson(searchFixture), token: 'SUPERSECRET-abc123' }),
+      makeCtx('op=search&query=matrix', {
+        fetch: okJson(searchFixture),
+        token: 'SUPERSECRET-abc123',
+      }),
     );
     const bodyText = await res.text();
     expect(bodyText).not.toContain('SUPERSECRET-abc123');

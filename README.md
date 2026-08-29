@@ -44,9 +44,9 @@ Stop the stack with `supabase stop`.
 
 Set in `.env` locally (gitignored) and in the Vercel dashboard for deploys.
 
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `TMDB_ACCESS_TOKEN` | yes | TMDB v4 "API Read Access Token" (Bearer). Server-only — never sent to the browser. Get one at <https://www.themoviedb.org/settings/api>. |
+| Variable            | Required | Notes                                                                                                                                    |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `TMDB_ACCESS_TOKEN` | yes      | TMDB v4 "API Read Access Token" (Bearer). Server-only — never sent to the browser. Get one at <https://www.themoviedb.org/settings/api>. |
 
 Supabase URL / anon-key variables are added in the Supabase-layer cycle.
 
