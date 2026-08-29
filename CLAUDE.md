@@ -22,9 +22,18 @@ src/
     api/tmdb.ts        TMDB proxy
   components/          Shelf, Spine, SearchBar, FilmCase
   lib/                 supabase.ts, tmdb.ts, colors.ts
+  types/               cross-cutting interfaces and type aliases
+  constants/           cross-cutting constant values
   styles/
 supabase/migrations/   <timestamp>_initial_schema.sql
 ```
+
+## Ways of working
+
+@.claude/.rules/constants-and-types.md
+@.claude/.rules/git-workflow.md
+@.claude/.rules/commit-messages.md
+@.claude/.rules/comments.md
 
 ## Database
 
