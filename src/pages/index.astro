@@ -1,5 +1,21 @@
 ---
+import { LOGIN_PATH, SIGNOUT_PATH } from '../constants';
+
 export const prerender = false;
+
+const { user, supabase } = Astro.locals;
+if (!user) return Astro.redirect(LOGIN_PATH);
+
+// `.eq('owner', user.sub)` is REQUIRED: the shelves SELECT policy also exposes
+// other users' public shelves (for /e/[slug]), so RLS alone would not scope
+// this list to the signed-in user.
+const { data: shelves, error } = await supabase
+  .from('shelves')
+  .select('id, name, slug, accent_color, is_public')
+  .eq('owner', user.sub)
+  .order('created_at', { ascending: true });
+
+if (error) console.error('[index] shelves query failed', error);
 ---
 
 <!doctype html>
@@ -12,7 +28,24 @@ export const prerender = false;
   <body>
     <main>
       <h1>Videothèque</h1>
-      <p>Coming soon.</p>
+      <p>Signed in as {user.email}</p>
+
+      {error && <p role="alert">Could not load your shelves: {error.message}</p>}
+
+      <ul>
+        {
+          (shelves ?? []).map((shelf) => (
+            <li>
+              <a href={`/e/${shelf.slug}`}>{shelf.name}</a>
+              {!shelf.is_public && <span> (private)</span>}
+            </li>
+          ))
+        }
+      </ul>
+
+      <form method="POST" action={SIGNOUT_PATH}>
+        <button type="submit">Sign out</button>
+      </form>
     </main>
   </body>
 </html>
