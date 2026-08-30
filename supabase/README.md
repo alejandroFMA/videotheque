@@ -129,6 +129,51 @@ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 The script runs in a transaction and rolls back, so it is safe to re-run. It
 switches Postgres roles to exercise RLS as `anon` and `authenticated`.
 
+## Auth setup (hosted project)
+
+The app uses magic-link (email OTP) auth via `@supabase/ssr`. Configure the
+linked project once:
+
+1. **Authentication → Providers → Email:** enable email provider and magic
+   link; keep "Enable email signups" on (sign-up is open by design).
+2. **Authentication → URL Configuration:**
+   - **Site URL:** the production URL (e.g. `https://videotheque.vercel.app`).
+   - **Redirect URLs:** exact paths only —
+     `http://localhost:3000/auth/confirm` and
+     `https://<prod-domain>/auth/confirm`. `signInWithOtp` sends
+     `emailRedirectTo` from the browser's origin, so this allowlist is what
+     stops a link being aimed elsewhere. For Vercel previews add one narrow
+     wildcard (`https://videotheque-*-<team>.vercel.app/auth/confirm`), not
+     `**`.
+3. **Authentication → Email Templates → Magic Link:** set the link to
+
+   ```
+   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
+   ```
+
+   The default template uses `{{ .ConfirmationURL }}`, which drives the PKCE
+   `?code` flow instead and breaks cross-device sign-in.
+
+4. **Local `.env`:** set `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_ANON_KEY`
+   from **Project Settings → API** (Project URL, and the publishable/anon key).
+   These are also needed in the **build** environment — on Vercel, **Project
+   Settings → Environment Variables**, set before the build runs. `astro:env`
+   inlines public vars at build time, so changing them takes a redeploy, not a
+   restart.
+5. **Authentication → Signing Keys (JWT Keys):** migrate to asymmetric JWT
+   signing keys ("Migrate to asymmetric keys" / rotate to `ES256` or `RS256`).
+   Route protection uses `getClaims()`, which verifies the JWT locally with no
+   per-request network call only when the project uses asymmetric keys. On the
+   legacy shared secret it falls back to a `getUser()` round-trip on every
+   authenticated request.
+
+### Testing magic links locally
+
+With the local stack (`supabase start`), emails are caught by Inbucket at
+http://127.0.0.1:54324 — no real delivery. The local API URL and anon key come
+from `supabase status`. Against the hosted project, real email is sent to the
+address you enter.
+
 ## Apply to a hosted project
 
 ```bash
