@@ -1,5 +1,12 @@
 import type { EmailOtpType } from '@supabase/supabase-js';
-import { DEFAULT_OTP_TYPE, HOME_PATH, LINK_ERROR_QUERY, LOGIN_PATH, OTP_TYPES } from '../constants';
+import {
+  DEFAULT_OTP_TYPE,
+  HOME_PATH,
+  HTTP_SEE_OTHER,
+  LINK_ERROR_QUERY,
+  LOGIN_PATH,
+  OTP_TYPES,
+} from '../constants';
 
 export interface AuthConfirmContext {
   params: URLSearchParams;
@@ -7,7 +14,7 @@ export interface AuthConfirmContext {
 }
 
 export interface AuthConfirmResult {
-  status: 303;
+  status: typeof HTTP_SEE_OTHER;
   location: string;
 }
 
@@ -36,7 +43,7 @@ function resolveType(raw: string | null): EmailOtpType {
  */
 export async function handleAuthConfirm(ctx: AuthConfirmContext): Promise<AuthConfirmResult> {
   const failure: AuthConfirmResult = {
-    status: 303,
+    status: HTTP_SEE_OTHER,
     location: `${LOGIN_PATH}?${LINK_ERROR_QUERY}`,
   };
 
@@ -60,5 +67,5 @@ export async function handleAuthConfirm(ctx: AuthConfirmContext): Promise<AuthCo
     return failure;
   }
 
-  return { status: 303, location: safeNext(ctx.params.get('next')) };
+  return { status: HTTP_SEE_OTHER, location: safeNext(ctx.params.get('next')) };
 }

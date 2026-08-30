@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { HTTP_SEE_OTHER, LINK_ERROR_QUERY, LOGIN_PATH } from '../../constants';
 import { handleAuthConfirm } from '../../lib/auth-confirm';
 import { serverClient } from '../../lib/supabase';
 
@@ -20,8 +21,8 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
   } catch (err) {
     console.error('[auth/confirm] failed to build the redirect response', err);
     return new Response(null, {
-      status: 303,
-      headers: new Headers({ Location: '/login?error=link' }),
+      status: HTTP_SEE_OTHER,
+      headers: new Headers({ Location: `${LOGIN_PATH}?${LINK_ERROR_QUERY}` }),
     });
   }
 };

@@ -1,6 +1,6 @@
 import { parseCookieHeader } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
-import type { AstroCookies } from 'astro';
+import type { AstroCookies, AstroCookieSetOptions } from 'astro';
 
 interface CookieToSet {
   name: string;
@@ -26,7 +26,7 @@ export function makeCookieAdapter(
     },
     setAll(cookiesToSet: CookieToSet[], headers: Record<string, string>) {
       for (const { name, value, options } of cookiesToSet) {
-        cookies.set(name, value, options as Parameters<AstroCookies['set']>[2]);
+        cookies.set(name, value, options as AstroCookieSetOptions);
       }
       for (const [key, value] of Object.entries(headers)) {
         responseHeaders.set(key, value);
