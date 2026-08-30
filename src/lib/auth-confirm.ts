@@ -12,7 +12,11 @@ export interface AuthConfirmResult {
 }
 
 function safeNext(raw: string | null): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) {
+  // Must be a path starting with a single "/" (not "//" or "/\"), and contain
+  // no control characters — browsers strip tab/CR/LF before URL parsing, which
+  // turns "/<TAB>/evil.com" into a protocol-relative redirect.
+  // eslint-disable-next-line no-control-regex -- rejecting control chars is the point
+  if (!raw || !/^\/[^/\\]/.test(raw) || /[\u0000-\u001f\u007f]/.test(raw)) {
     return HOME_PATH;
   }
   return raw;

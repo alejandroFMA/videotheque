@@ -14,6 +14,14 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
     verifyOtp: (args) => supabase.auth.verifyOtp(args),
   });
 
-  headers.set('Location', location);
-  return new Response(null, { status, headers });
+  try {
+    headers.set('Location', location);
+    return new Response(null, { status, headers });
+  } catch (err) {
+    console.error('[auth/confirm] failed to build the redirect response', err);
+    return new Response(null, {
+      status: 303,
+      headers: new Headers({ Location: '/login?error=link' }),
+    });
+  }
 };

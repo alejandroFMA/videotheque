@@ -27,15 +27,20 @@ describe('handleAuthConfirm', () => {
     expect(res.location).toBe('/shelf/xyz');
   });
 
-  it.each(['//evil.com', 'https://evil.com', 'evil', '/\\evil'])(
-    'ignores an unsafe `next` (%s) and redirects home',
-    async (next) => {
-      const res = await handleAuthConfirm(
-        ctx(`token_hash=abc&type=email&next=${encodeURIComponent(next)}`),
-      );
-      expect(res.location).toBe('/');
-    },
-  );
+  it.each([
+    '//evil.com',
+    'https://evil.com',
+    'evil',
+    '/\\evil',
+    '/\tevil.com',
+    '/\nevil',
+    '/\revil',
+  ])('ignores an unsafe `next` (%s) and redirects home', async (next) => {
+    const res = await handleAuthConfirm(
+      ctx(`token_hash=abc&type=email&next=${encodeURIComponent(next)}`),
+    );
+    expect(res.location).toBe('/');
+  });
 
   it('falls back to type=email for an unknown `type`', async () => {
     const c = ctx('token_hash=abc&type=bogus');

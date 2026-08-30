@@ -47,20 +47,26 @@ if (Astro.locals.user) return Astro.redirect(HOME_PATH);
           if (button) button.disabled = true;
           status.textContent = 'Sending…';
 
-          const { error } = await browserClient().auth.signInWithOtp({
-            email,
-            options: { emailRedirectTo: `${location.origin}${CONFIRM_PATH}` },
-          });
+          try {
+            const { error } = await browserClient().auth.signInWithOtp({
+              email,
+              options: { emailRedirectTo: `${location.origin}${CONFIRM_PATH}` },
+            });
 
-          if (error) {
-            console.error('[login] signInWithOtp failed', error);
-            status.textContent = error.message;
+            if (error) {
+              console.error('[login] signInWithOtp failed', error);
+              status.textContent = error.message;
+              if (button) button.disabled = false;
+              return;
+            }
+
+            form.hidden = true;
+            status.textContent = `Check ${email} for a sign-in link.`;
+          } catch (err) {
+            console.error('[login] signInWithOtp threw', err);
+            status.textContent = 'Something went wrong — try again.';
             if (button) button.disabled = false;
-            return;
           }
-
-          form.hidden = true;
-          status.textContent = `Check ${email} for a sign-in link.`;
         });
       }
     </script>
