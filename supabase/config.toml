@@ -234,8 +234,10 @@ secure_password_change = false
 max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
-# Number of seconds before the email OTP expires (defaults to 1 hour).
-otp_expiry = 3600
+# Number of seconds before the email OTP expires (defaults to 1 hour, max 604800
+# = 1 week). Set to a week for a roomy local sign-in window; templates/confirm.html
+# quotes "one week" — keep them in step.
+otp_expiry = 604800
 
 # The app verifies the link server-side with verifyOtp({ token_hash, type }) in
 # src/pages/auth/confirm.ts. The stock templates use {{ .ConfirmationURL }},
