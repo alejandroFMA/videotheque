@@ -22,7 +22,7 @@ In scope:
 - Add `@supabase/supabase-js` and `@supabase/ssr` (pinned, lockfile committed).
 - `src/lib/supabase.ts`: server and browser client factories over the
   `@supabase/ssr` cookie adapter, plus co-located auth constants.
-- `src/middleware.ts`: per-request server client, `getUser()`, populate
+- `src/middleware.ts`: per-request server client, `getClaims()`, populate
   `Astro.locals`. No redirects here.
 - `src/pages/login.astro`: email form, calls `signInWithOtp` in a client
   script, shows a "check your inbox" state; redirects to `/` if already signed
@@ -93,6 +93,13 @@ with a valid email gets an account, and the `on_auth_user_created` trigger
 seeds their first shelf. Private shelves stay protected by RLS regardless of
 who can sign in. No allowlist.
 
+Accepted risk: an attacker who completes email verification for many addresses
+creates one seeded (public, empty) shelf each. Supabase's built-in OTP send
+rate limits (per address and per hour, project-wide) bound this; for a
+two-user app it is not worth an allowlist or a captcha. If it ever matters, the
+contained fix is an allowlist check before `signInWithOtp` plus tightening the
+Auth rate-limit settings — no schema change.
+
 ### 4. `token_hash` + `verifyOtp`, not PKCE `exchangeCodeForSession`
 
 The email link carries a `token_hash`; `src/pages/auth/confirm.ts` calls
@@ -105,13 +112,20 @@ flow.
 
 ### 5. Middleware populates, pages gate
 
-`src/middleware.ts` only builds `locals.supabase` and resolves `locals.user`
-(via `getUser()`, which revalidates the JWT with the auth server — never
-`getSession()` for an auth decision server-side). The redirect lives in the
-page: `index.astro` does `if (!Astro.locals.user) return
-Astro.redirect(LOGIN_PATH)`. One protected page today; no route-matcher list to
-keep in sync. When the shelf editor arrives and there are several protected
-pages, a matcher can move into the middleware then.
+`src/middleware.ts` only builds `locals.supabase` and resolves `locals.user`.
+The redirect lives in the page: `index.astro` does `if (!Astro.locals.user)
+return Astro.redirect(LOGIN_PATH)`. One protected page today; no route-matcher
+list to keep in sync. When the shelf editor arrives and there are several
+protected pages, a matcher can move into the middleware then.
+
+The user is resolved with **`getClaims()`** (verifies the JWT signature locally
+against the project's asymmetric signing keys, no round-trip to the auth
+server) — the current recommended call for route protection. `getUser()` is the
+fallback if the project has not enabled asymmetric JWT signing keys (then
+`getClaims()` would round-trip anyway). Never `getSession()` for an auth
+decision server-side — it does not verify. Whichever call is used, run it
+**immediately** after `createServerClient` with nothing in between, or session
+refresh races cause sporadic logouts.
 
 ### 6. `index.astro` scope this phase: auth + list shelves
 
@@ -127,7 +141,7 @@ package.json                     + @supabase/supabase-js, @supabase/ssr (pinned)
 astro.config.mjs                 env.schema: PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY
 .env.example                     + those two, with the "publishable key is public" note
 src/
-  env.d.ts                       declare App.Locals { supabase: SupabaseClient; user: User | null }
+  env.d.ts                       declare App.Locals { supabase: SupabaseClient; user: JwtPayload | null }
   lib/
     supabase.ts                  serverClient(cookies) / browserClient(); auth constants
     auth-confirm.ts              pure handler: (ctx) -> { status, location }
@@ -164,15 +178,22 @@ export const SIGNOUT_PATH = '/auth/signout';
 export const POST_LOGIN_PATH = '/';
 export const OTP_TYPE = 'email' as const; // EmailOtpType for verifyOtp
 
-export function serverClient(cookies: AstroCookies, requestHeaders: Headers) {
+export function serverClient(
+  cookies: AstroCookies,
+  requestHeaders: Headers,
+  responseHeaders: Headers,
+) {
   return createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
       getAll() {
         return parseCookieHeader(requestHeaders.get('Cookie') ?? '');
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
         for (const { name, value, options } of cookiesToSet) {
           cookies.set(name, value, options);
+        }
+        for (const [key, value] of Object.entries(headers ?? {})) {
+          responseHeaders.set(key, value);
         }
       },
     },
@@ -187,11 +208,19 @@ export function browserClient() {
 Notes for the plan:
 
 - Pin `@supabase/ssr` first, then match `setAll`'s signature to that version's
-  types. Current docs show `setAll(cookiesToSet, headers)` where `headers`
-  carries `Cache-Control` / `Expires` / `Pragma` to keep a CDN from caching a
-  response that sets a session cookie. If the pinned version exposes that
-  second argument, also copy those onto `Astro.response.headers`; if its types
-  show one argument, the block above is complete.
+  types. Current docs (verified against context7, Sept 2026) show
+  `setAll(cookiesToSet, headers)` where `headers` carries `Cache-Control` /
+  `Expires` / `Pragma` so a CDN never caches a response that sets a session
+  cookie — copying them onto the response headers is not optional. If the
+  pinned version's types show a one-argument `setAll`, drop the second loop.
+- `responseHeaders` is `Astro.response.headers` in a page/endpoint and
+  `context.request` has no response object in middleware — there,
+  `setAll` runs against the headers of the `Response` returned by `next()`.
+  The plan resolves this: either wrap `next()` and copy headers, or (simpler,
+  and enough here) skip the cache headers in middleware since middleware only
+  reads the session and the auth cookies are refreshed with `HttpOnly` +
+  `SameSite=Lax` regardless. Pages that call `verifyOtp` / `signOut` do have
+  `Astro.response.headers` and must pass it.
 - `parseCookieHeader` may return `value: string | undefined`; coerce to `''`
   before handing tuples back if the pinned version's types require it.
 - `PUBLIC_SUPABASE_ANON_KEY` holds whichever the project has — a modern
@@ -206,17 +235,29 @@ import { defineMiddleware } from 'astro:middleware';
 import { serverClient } from './lib/supabase';
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  const supabase = serverClient(context.cookies, context.request.headers);
-  const { data } = await supabase.auth.getUser();
+  const supabase = serverClient(
+    context.cookies,
+    context.request.headers,
+    context.response?.headers ?? new Headers(),
+  );
+  // Nothing between createServerClient and this call — see Decision 5.
+  const { data } = await supabase.auth.getClaims();
   context.locals.supabase = supabase;
-  context.locals.user = data.user ?? null;
+  context.locals.user = data?.claims ?? null;
   return next();
 });
 ```
 
-- A thrown or errored `getUser()` (network, expired refresh token) resolves to
-  `user: null` — treat it as signed out, do not 500.
+- `locals.user` carries the verified JWT claims (`sub` is the user id, used as
+  `owner` in the shelves query). If a later page needs the full user record it
+  calls `locals.supabase.auth.getUser()` itself.
+- A thrown or errored `getClaims()` (network, expired/absent refresh token)
+  resolves to `user: null` — treat it as signed out, do not 500.
 - No redirect. `login.astro` and `index.astro` read `Astro.locals.user`.
+- The exact `context` field for the outgoing response headers is confirmed
+  against the pinned Astro version in the plan; the fallback `new Headers()`
+  keeps `setAll` from throwing if it is absent (cache headers are non-critical
+  for a read-only middleware pass — see the `supabase.ts` notes).
 
 ### `src/lib/auth-confirm.ts`
 
@@ -259,8 +300,14 @@ export const GET: APIRoute = async ({ locals, url, redirect }) => {
 };
 ```
 
-The cookies are written as a side effect of `verifyOtp` through the middleware
-client's `setAll`.
+`verifyOtp` writes the fresh `sb-<ref>-auth-token` cookies as a side effect via
+the client's `setAll` → `Astro.cookies.set`. The confirm and signout routes
+reuse `locals.supabase`; the plan verifies the cookie writes land on the
+outgoing response (they go through the shared `Astro.cookies`, so they do). If
+the pinned Astro version makes `Astro.response.headers` reachable only from the
+page and not the middleware-built client, the plan rebuilds a one-off
+`serverClient(Astro.cookies, Astro.request.headers, Astro.response.headers)` in
+these two routes instead.
 
 ### `src/pages/auth/signout.ts`
 
@@ -273,7 +320,11 @@ export const POST: APIRoute = async ({ locals, redirect }) => {
 ```
 
 POST only, triggered by a real `<form method="POST" action="/auth/signout">` on
-`index.astro` — no JS needed, and GET stays side-effect free.
+`index.astro` — no JS needed, and GET stays side-effect free. Cross-site
+sign-out (a mild CSRF: an attacker can only log you out) is blocked by Astro's
+`security.checkOrigin`, on by default for on-demand pages, which rejects
+form-encoded POSTs whose `Origin` does not match. The plan confirms it is not
+disabled in `astro.config.mjs`; no CSRF token is added.
 
 ### `src/pages/login.astro`
 
@@ -299,15 +350,22 @@ if (!user) return Astro.redirect(LOGIN_PATH);
 const { data: shelves, error } = await supabase
   .from('shelves')
   .select('id, name, slug, accent_color, is_public')
+  .eq('owner', user.sub) // REQUIRED — see below
   .order('created_at', { ascending: true });
 ---
 ```
 
-Renders the user's email, a `<ul>` of shelves (name, `/e/<slug>`, a
-public/private marker), and the sign-out form. `error` renders a plain inline
-message; the RLS `owner = auth.uid()` filter already scopes the rows, so no
-explicit `.eq('owner', …)` is required (adding it is harmless and can stay for
-clarity).
+Renders the user's email (`user.email` claim), a `<ul>` of shelves (name,
+`/e/<slug>`, a public/private marker), and the sign-out form. `error` renders a
+plain inline message.
+
+**`.eq('owner', user.sub)` is mandatory, not cosmetic.** The `shelves` SELECT
+policy is `using (is_public or owner = (select auth.uid()))` — it deliberately
+also exposes *other users'* public shelves so the `/e/[slug]` route can read
+them without a session. Without the explicit owner filter, the home page would
+list every public shelf on the platform alongside the user's own. RLS is the
+security boundary (a private shelf of another user still never returns);
+`.eq('owner', …)` is the correctness boundary for "my shelves".
 
 ## Auth flow
 
@@ -335,7 +393,7 @@ clarity).
 | `signInWithOtp` fails (network, Supabase OTP rate limit ~1/60 s per email) | Inline message on `/login` using `error.message`; form preserved. |
 | `/auth/confirm` with no `token_hash`, a `verifyOtp` error, or a throw | 303 → `/login?error=link`; login shows a friendly line. |
 | `next` query param not a safe same-origin path | Ignored; redirect to `POST_LOGIN_PATH`. |
-| `getUser()` errors/throws in middleware | `locals.user = null`; user is treated as signed out. |
+| `getClaims()` errors/throws in middleware | `locals.user = null`; user is treated as signed out. |
 | Signed-in user visits `/login` | 303 → `/`. |
 | `shelves` select returns an error | Inline message on `index.astro`; page still renders. |
 
@@ -365,8 +423,12 @@ Dashboard steps, documented in `supabase/README.md` under a new "Auth setup"
 section:
 
 - **Authentication → URL Configuration**: Site URL = the production Vercel URL.
-  Redirect URLs = `http://localhost:3000/auth/confirm` and
-  `https://<vercel-domain>/auth/confirm` (plus any preview-deploy pattern).
+  Redirect URLs = exact paths only: `http://localhost:3000/auth/confirm` and
+  `https://<vercel-domain>/auth/confirm`. `signInWithOtp` passes
+  `emailRedirectTo` from the browser's `location.origin`, so this allowlist is
+  what stops a magic link being aimed at an attacker's host — keep it tight. If
+  Vercel preview deploys need to log in, add one narrowly-scoped wildcard
+  (`https://videotheque-*-<team>.vercel.app/auth/confirm`), not `**`.
 - **Authentication → Email Templates → Magic Link**: set the link to
   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`
   (the default template uses `{{ .ConfirmationURL }}`, which drives the PKCE
@@ -396,10 +458,13 @@ section:
   4. `/` lists exactly one shelf (the sign-up seed) with its slug.
   5. Create a second shelf via SQL → reload → both listed, in `created_at`
      order.
-  6. Sign out → back to `/login`; revisiting `/` redirects to `/login`.
-  7. Visit `/auth/confirm` with no query → `/login?error=link` with the
+  6. Create a **public** shelf owned by a different user via SQL → reload `/` →
+     it does **not** appear (owner filter), but `GET /e/<that-slug>` still
+     serves it.
+  7. Sign out → back to `/login`; revisiting `/` redirects to `/login`.
+  8. Visit `/auth/confirm` with no query → `/login?error=link` with the
      message shown.
-  8. Signed in, open `/login` → redirected to `/`.
+  9. Signed in, open `/login` → redirected to `/`.
 - `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build` all
   green. No Playwright in this sub-project.
 
@@ -417,7 +482,8 @@ this change.
 - With real Supabase credentials in `.env`, the manual checklist passes end to
   end, including opening the magic link on a second device/browser.
 - `index.astro` performs exactly one Supabase query to render (the `shelves`
-  select); it never calls TMDB.
+  select, filtered `.eq('owner', user.sub)`); it never calls TMDB, and it never
+  lists a shelf the signed-in user does not own.
 - The Supabase key in the client bundle is the publishable/anon key only; no
   service-role key anywhere in the repo or the shipped JS.
 - `src/lib/auth-confirm.ts` has no Astro import and is fully covered by
