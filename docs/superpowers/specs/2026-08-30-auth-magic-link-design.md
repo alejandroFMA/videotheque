@@ -134,6 +134,28 @@ shelves (`name`, `slug`, `accent_color`, `is_public`) and a sign-out button. No
 shelf visuals, no create/edit. This exercises the authenticated server query
 and the RLS path before the visual port.
 
+### 7. Observability: log every failure, swallow none
+
+The graceful fallbacks below (anonymous view on a bad token, `/login?error=link`
+on a bad magic link, an inline message on a query error) stay — a two-user app
+should not 500 a whole page because Supabase auth blipped. But every one of
+them emits a log first. Convention, extending the existing `[api/tmdb]` prefix
+in `src/lib/tmdb-proxy.ts`:
+
+- `console.warn('[tag] …', detail)` for routine, user-recoverable conditions:
+  an expired or malformed JWT, a magic link that failed to verify, a callback
+  with no `token_hash`.
+- `console.error('[tag] …', err)` for the unexpected: a thrown exception, a
+  transport failure to the auth server, `signOut()` returning an error.
+- Tags: `[auth/session]`, `[auth/confirm]`, `[middleware]`, `[api/auth/signout]`,
+  `[index]`, and `[login]` (browser console) for the client script.
+
+`console` is the sink on purpose — Vercel captures stdout/stderr into its log
+stream, and a real logger is a runtime dependency this project does not need
+yet. Configuration errors (missing `PUBLIC_SUPABASE_*`) are **not** caught:
+`serverClient()` throws a descriptive error and the request fails loudly, which
+is the correct signal for a broken deployment.
+
 ## File structure
 
 ```
@@ -251,8 +273,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
 - `locals.user` carries the verified JWT claims (`sub` is the user id, used as
   `owner` in the shelves query). If a later page needs the full user record it
   calls `locals.supabase.auth.getUser()` itself.
-- A thrown or errored `getClaims()` (network, expired/absent refresh token)
-  resolves to `user: null` — treat it as signed out, do not 500.
+- The `getClaims()` call and the anonymous-fallback logic are extracted to
+  `src/lib/auth-session.ts::resolveUser(supabase)` so they can be unit-tested
+  (the plan defines it). `resolveUser` returns `user: null` for three cases and
+  logs two of them:
+  - no session (`data` null, no error) → `null`, **no log** (routine).
+  - `getClaims()` returned an error (expired/invalid JWT) → `null` after
+    `console.warn('[auth/session] …', error)`.
+  - `getClaims()` threw (transport failure, bug) → `null` after
+    `console.error('[auth/session] …', err)`.
+  Never 500 the request over this — a signed-out render is the safe fallback —
+  but never do it silently.
 - No redirect. `login.astro` and `index.astro` read `Astro.locals.user`.
 - The exact `context` field for the outgoing response headers is confirmed
   against the pinned Astro version in the plan; the fallback `new Headers()`
@@ -278,14 +309,18 @@ export async function handleAuthConfirm(ctx: AuthConfirmContext): Promise<AuthCo
 
 Behaviour:
 
-| Input | Result |
-| --- | --- |
-| `token_hash` present, `verifyOtp` returns no error | 303 → `next` if it is a same-origin absolute path, else `POST_LOGIN_PATH` |
-| `token_hash` missing, or `verifyOtp` returns an error, or it throws | 303 → `${LOGIN_PATH}?error=link` |
+| Input | Result | Log |
+| --- | --- | --- |
+| `token_hash` present, `verifyOtp` returns no error | 303 → `next` if it is a same-origin absolute path, else `POST_LOGIN_PATH` | — |
+| `token_hash` missing | 303 → `${LOGIN_PATH}?error=link` | `console.warn('[auth/confirm] …')` |
+| `verifyOtp` returns an error | 303 → `${LOGIN_PATH}?error=link` | `console.warn('[auth/confirm] …', error)` |
+| `verifyOtp` throws | 303 → `${LOGIN_PATH}?error=link` | `console.error('[auth/confirm] …', err)` |
 
-`type` comes from the query (`type` param) when present and in the allowed set
-(`email`, `magiclink`, `recovery`), else defaults to `OTP_TYPE`. `next` is
-accepted only when it starts with `/` and not `//` (open-redirect guard).
+Like `handleTmdbRequest`, this handler logs at the boundary and still returns a
+controlled result — it does not rethrow. `type` comes from the query (`type`
+param) when present and in the allowed set (`email`, `magiclink`, `recovery`),
+else defaults to `OTP_TYPE`. `next` is accepted only when it starts with `/`,
+not `//`, and contains no backslash (open-redirect guard).
 
 ### `src/pages/auth/confirm.ts`
 
@@ -314,8 +349,9 @@ these two routes instead.
 ```ts
 export const prerender = false;
 export const POST: APIRoute = async ({ locals, redirect }) => {
-  await locals.supabase.auth.signOut();
-  return redirect(LOGIN_PATH, 303);
+  const { error } = await locals.supabase.auth.signOut();
+  if (error) console.error('[api/auth/signout] signOut failed', error);
+  return redirect(LOGIN_PATH, 303); // redirect regardless — the user asked to leave
 };
 ```
 
@@ -333,7 +369,8 @@ disabled in `astro.config.mjs`; no CSRF token is added.
   `browserClient`, calls
   `signInWithOtp({ email, options: { emailRedirectTo: \`${location.origin}${CONFIRM_PATH}\` } })`,
   and swaps the form for a "check your inbox" message on success.
-- On error, shows `error.message` inline and leaves the form in place.
+- On error, `console.error('[login] signInWithOtp failed', error)`, shows
+  `error.message` inline, and leaves the form in place.
 - Reads `?error=link` on load and shows "That link didn't work — request a new
   one."
 - No framework: `document.querySelector` + one event listener, matching the
@@ -352,12 +389,15 @@ const { data: shelves, error } = await supabase
   .select('id, name, slug, accent_color, is_public')
   .eq('owner', user.sub) // REQUIRED — see below
   .order('created_at', { ascending: true });
+
+if (error) console.error('[index] shelves query failed', error);
 ---
 ```
 
 Renders the user's email (`user.email` claim), a `<ul>` of shelves (name,
-`/e/<slug>`, a public/private marker), and the sign-out form. `error` renders a
-plain inline message.
+`/e/<slug>`, a public/private marker), and the sign-out form. On a query
+`error` the page still renders with an inline alert **and** the failure is
+logged server-side — it is not shown to the user and forgotten.
 
 **`.eq('owner', user.sub)` is mandatory, not cosmetic.** The `shelves` SELECT
 policy is `using (is_public or owner = (select auth.uid()))` — it deliberately
@@ -388,14 +428,19 @@ security boundary (a private shelf of another user still never returns);
 
 ## Error handling
 
-| Case | Handling |
-| --- | --- |
-| `signInWithOtp` fails (network, Supabase OTP rate limit ~1/60 s per email) | Inline message on `/login` using `error.message`; form preserved. |
-| `/auth/confirm` with no `token_hash`, a `verifyOtp` error, or a throw | 303 → `/login?error=link`; login shows a friendly line. |
-| `next` query param not a safe same-origin path | Ignored; redirect to `POST_LOGIN_PATH`. |
-| `getClaims()` errors/throws in middleware | `locals.user = null`; user is treated as signed out. |
-| Signed-in user visits `/login` | 303 → `/`. |
-| `shelves` select returns an error | Inline message on `index.astro`; page still renders. |
+| Case | Handling | Log |
+| --- | --- | --- |
+| `signInWithOtp` fails (network, Supabase OTP rate limit ~1/60 s per email) | Inline message on `/login` using `error.message`; form preserved. | `console.error('[login] …', error)` (browser) |
+| `/auth/confirm` with no `token_hash` or a `verifyOtp` error | 303 → `/login?error=link`; login shows a friendly line. | `console.warn('[auth/confirm] …')` |
+| `/auth/confirm` where `verifyOtp` throws | 303 → `/login?error=link`. | `console.error('[auth/confirm] …', err)` |
+| `next` query param not a safe same-origin path | Ignored; redirect to `POST_LOGIN_PATH`. | — (not an error) |
+| `getClaims()` returns an error in middleware (expired/invalid JWT) | `locals.user = null`; treated as signed out. | `console.warn('[auth/session] …', error)` |
+| `getClaims()` throws in middleware (transport, bug) | `locals.user = null`; treated as signed out. | `console.error('[auth/session] …', err)` |
+| No session at all (anonymous visitor) | `locals.user = null`. | — (routine) |
+| `signOut()` returns an error | Still 303 → `/login`. | `console.error('[api/auth/signout] …', error)` |
+| Signed-in user visits `/login` | 303 → `/`. | — |
+| `shelves` select returns an error | Inline alert on `index.astro`; page still renders. | `console.error('[index] …', error)` |
+| `PUBLIC_SUPABASE_*` missing | `serverClient()` throws; request fails loudly. | Uncaught — propagates (intentional). |
 
 ## Env and Supabase configuration
 
@@ -439,16 +484,27 @@ section:
 ## Testing
 
 - **Unit — `test/auth-confirm.test.ts`** (mirrors `test/tmdb-proxy.test.ts`,
-  injected deps, no network):
-  - `token_hash` present + `verifyOtp` ok → 303 to `POST_LOGIN_PATH`.
+  injected deps, no network; `beforeEach` spies on `console.warn` / `console.error`):
+  - `token_hash` present + `verifyOtp` ok → 303 to `POST_LOGIN_PATH`; nothing logged.
   - valid same-origin `next` → 303 to `next`.
-  - `next` of `//evil.com`, `https://evil.com`, or `not-a-path` → 303 to
-    `POST_LOGIN_PATH`.
-  - missing `token_hash` → 303 to `/login?error=link`, `verifyOtp` not called.
-  - `verifyOtp` returns `{ error }` → 303 to `/login?error=link`.
-  - `verifyOtp` throws → 303 to `/login?error=link`.
+  - `next` of `//evil.com`, `https://evil.com`, `not-a-path`, or `/\evil` → 303
+    to `POST_LOGIN_PATH`.
+  - missing `token_hash` → 303 to `/login?error=link`, `verifyOtp` not called,
+    `console.warn` called with a `[auth/confirm]` message.
+  - `verifyOtp` returns `{ error }` → 303 to `/login?error=link`,
+    `console.warn('[auth/confirm] …', error)`.
+  - `verifyOtp` throws → 303 to `/login?error=link`,
+    `console.error('[auth/confirm] …', err)`.
   - `type` from an allowed query value is forwarded; an unknown `type` falls
     back to `OTP_TYPE`.
+- **Unit — `test/auth-session.test.ts`** (`beforeEach` spies on `console`):
+  - `getClaims` ok → returns claims; `console.warn` / `console.error` not called.
+  - `data` null + no error → returns `null`; nothing logged.
+  - `getClaims` returns `{ error }` → returns `null`; `console.warn('[auth/session] …', error)`.
+  - `getClaims` throws → returns `null`; `console.error('[auth/session] …', err)`.
+- **Unit — `test/supabase-cookies.test.ts`**: `getAll` parses the `Cookie`
+  header; `setAll` writes each cookie via `cookies.set` and copies cache
+  headers onto the response `Headers`.
 - `serverClient` / `browserClient` are not unit-tested (thin SDK wrappers);
   covered by the manual checklist.
 - **Manual checklist** (record in the plan, run against the hosted project):
@@ -463,8 +519,11 @@ section:
      serves it.
   7. Sign out → back to `/login`; revisiting `/` redirects to `/login`.
   8. Visit `/auth/confirm` with no query → `/login?error=link` with the
-     message shown.
+     message shown, and the dev-server console prints `[auth/confirm]`.
   9. Signed in, open `/login` → redirected to `/`.
+  10. Tail the dev-server output through the run: a bad link logs
+      `[auth/confirm]`, an expired session logs `[auth/session]`, and a normal
+      signed-in page load logs nothing.
 - `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build` all
   green. No Playwright in this sub-project.
 
@@ -488,5 +547,10 @@ this change.
   service-role key anywhere in the repo or the shipped JS.
 - `src/lib/auth-confirm.ts` has no Astro import and is fully covered by
   `test/auth-confirm.test.ts`.
+- Every auth failure path emits a tagged `console.warn` / `console.error`
+  (`[auth/session]`, `[auth/confirm]`, `[api/auth/signout]`, `[index]`,
+  `[login]`); no `catch` block returns a fallback without logging first. A grep
+  for `catch` across the new files shows a log call in every body. Missing
+  `PUBLIC_SUPABASE_*` is the one deliberate uncaught throw.
 - `.env.example` and `supabase/README.md` document every new variable and
   dashboard setting.

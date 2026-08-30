@@ -18,6 +18,7 @@
 - **`index.astro` must filter shelves by `.eq('owner', user.sub)`.** The `shelves` SELECT policy is `is_public or owner = auth.uid()`, so RLS alone does not scope the list to the signed-in user.
 - **No magic values inline** for URLs, paths, and keys — name them (`src/constants/`). HTTP status codes may be inline literals, matching `src/lib/tmdb-proxy.ts`.
 - **Testable logic lives in plain `.ts` modules** with injected dependencies (the `src/lib/tmdb-proxy.ts` pattern); `.astro` and `src/pages/**` files stay thin wrappers.
+- **Observability — log every failure, swallow none.** Every `catch` and every error branch that returns a fallback first calls `console.warn('[tag] …', detail)` (routine: expired/invalid JWT, unverifiable magic link, missing `token_hash`) or `console.error('[tag] …', err)` (unexpected: a thrown exception, `signOut()` error, a failed DB query). Tags: `[auth/session]`, `[auth/confirm]`, `[middleware]`, `[api/auth/signout]`, `[index]`, `[login]`. The fallback behaviour (anonymous render, `/login?error=link`) stays — it just never happens silently. The **only** deliberate uncaught throw is missing `PUBLIC_SUPABASE_*` (`serverClient()` throws; a broken deployment must fail loudly). `console` is the sink — Vercel captures it; no logger dependency.
 - **CI gate (must stay green):** `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, in that order.
 - **Commit messages:** Conventional Commits, imperative subject ≤72 chars, keep the `Co-Authored-By:` and `Claude-Session:` trailers this repo uses.
 
@@ -403,7 +404,7 @@ EOF
 Create `test/auth-session.test.ts`:
 
 ```ts
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { resolveUser } from '../src/lib/auth-session';
 
 const claims = {
@@ -421,30 +422,47 @@ const claims = {
 const withGetClaims = (impl: () => Promise<unknown>) =>
   ({ auth: { getClaims: impl } }) as Parameters<typeof resolveUser>[0];
 
+beforeEach(() => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
 describe('resolveUser', () => {
-  it('returns the claims when getClaims succeeds', async () => {
+  it('returns the claims when getClaims succeeds, logging nothing', async () => {
     const supabase = withGetClaims(async () => ({
       data: { claims, header: { alg: 'RS256', kid: 'k', typ: 'JWT' }, signature: new Uint8Array() },
       error: null,
     }));
     expect(await resolveUser(supabase)).toEqual(claims);
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
   });
 
-  it('returns null when there is no session (data null, no error)', async () => {
+  it('returns null and logs nothing when there is no session (data null, no error)', async () => {
     const supabase = withGetClaims(async () => ({ data: null, error: null }));
     expect(await resolveUser(supabase)).toBeNull();
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
   });
 
-  it('returns null when getClaims resolves an error', async () => {
+  it('returns null and warns when getClaims resolves an error', async () => {
     const supabase = withGetClaims(async () => ({ data: null, error: new Error('bad jwt') }));
     expect(await resolveUser(supabase)).toBeNull();
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('[auth/session]'),
+      expect.any(Error),
+    );
   });
 
-  it('returns null when getClaims throws (network)', async () => {
+  it('returns null and logs an error when getClaims throws (network)', async () => {
     const supabase = withGetClaims(async () => {
       throw new Error('network down');
     });
     expect(await resolveUser(supabase)).toBeNull();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('[auth/session]'),
+      expect.any(Error),
+    );
   });
 });
 ```
@@ -466,13 +484,19 @@ type WithGetClaims = { auth: Pick<SupabaseClient['auth'], 'getClaims'> };
 /**
  * The verified JWT claims for the current request, or `null` when there is no
  * session or the token cannot be trusted. Never throws — a transport failure
- * against the auth server is treated as "signed out".
+ * against the auth server is treated as "signed out" — but a failure is always
+ * logged, never swallowed.
  */
 export async function resolveUser(supabase: WithGetClaims): Promise<JwtPayload | null> {
   try {
-    const { data } = await supabase.auth.getClaims();
+    const { data, error } = await supabase.auth.getClaims();
+    if (error) {
+      console.warn('[auth/session] getClaims returned an error; request treated as anonymous', error);
+      return null;
+    }
     return data?.claims ?? null;
-  } catch {
+  } catch (err) {
+    console.error('[auth/session] getClaims threw; request treated as anonymous', err);
     return null;
   }
 }
@@ -495,8 +519,9 @@ git add src/lib/auth-session.ts test/auth-session.test.ts
 git commit -m "$(cat <<'EOF'
 feat: resolve the request user from verified JWT claims
 
-resolveUser calls getClaims and returns the claims or null, swallowing
-transport errors as "signed out".
+resolveUser calls getClaims and returns the claims or null, degrading to
+"signed out" on error — but console.warn on a rejected token and
+console.error on a thrown one, never silently.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
@@ -524,7 +549,7 @@ EOF
 Create `test/auth-confirm.test.ts`:
 
 ```ts
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleAuthConfirm } from '../src/lib/auth-confirm';
 
 const FAIL = '/login?error=link';
@@ -533,12 +558,19 @@ function ctx(qs: string, verifyOtp = vi.fn().mockResolvedValue({ error: null }))
   return { params: new URLSearchParams(qs), verifyOtp };
 }
 
+beforeEach(() => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
 describe('handleAuthConfirm', () => {
-  it('verifies the token and redirects home on success', async () => {
+  it('verifies the token and redirects home on success, logging nothing', async () => {
     const c = ctx('token_hash=abc&type=email');
     const res = await handleAuthConfirm(c);
     expect(c.verifyOtp).toHaveBeenCalledWith({ token_hash: 'abc', type: 'email' });
     expect(res).toEqual({ status: 303, location: '/' });
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   it('honours a safe same-origin `next`', async () => {
@@ -562,21 +594,30 @@ describe('handleAuthConfirm', () => {
     expect(c.verifyOtp).toHaveBeenCalledWith({ token_hash: 'abc', type: 'email' });
   });
 
-  it('redirects to the link error when token_hash is missing, without verifying', async () => {
+  it('redirects to the link error and warns when token_hash is missing', async () => {
     const c = ctx('type=email');
     const res = await handleAuthConfirm(c);
     expect(c.verifyOtp).not.toHaveBeenCalled();
     expect(res).toEqual({ status: 303, location: FAIL });
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('[auth/confirm]'));
   });
 
-  it('redirects to the link error when verifyOtp returns an error', async () => {
+  it('redirects to the link error and warns when verifyOtp returns an error', async () => {
     const c = ctx('token_hash=abc&type=email', vi.fn().mockResolvedValue({ error: new Error('expired') }));
     expect((await handleAuthConfirm(c)).location).toBe(FAIL);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('[auth/confirm]'),
+      expect.any(Error),
+    );
   });
 
-  it('redirects to the link error when verifyOtp throws', async () => {
+  it('redirects to the link error and logs an error when verifyOtp throws', async () => {
     const c = ctx('token_hash=abc&type=email', vi.fn().mockRejectedValue(new Error('boom')));
     expect((await handleAuthConfirm(c)).location).toBe(FAIL);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('[auth/confirm]'),
+      expect.any(Error),
+    );
   });
 });
 ```
@@ -624,8 +665,10 @@ function resolveType(raw: string | null): EmailOtpType {
 }
 
 /**
- * Decides where `GET /auth/confirm` sends the browser. Pure: the caller injects
- * the real `verifyOtp`, whose cookie side effects land on the response.
+ * Decides where `GET /auth/confirm` sends the browser. The caller injects the
+ * real `verifyOtp`, whose cookie side effects land on the response. Logs every
+ * failure at the boundary (like `handleTmdbRequest`) and still returns a
+ * controlled result — it never rethrows.
  */
 export async function handleAuthConfirm(ctx: AuthConfirmContext): Promise<AuthConfirmResult> {
   const failure: AuthConfirmResult = {
@@ -634,15 +677,22 @@ export async function handleAuthConfirm(ctx: AuthConfirmContext): Promise<AuthCo
   };
 
   const tokenHash = ctx.params.get('token_hash');
-  if (!tokenHash) return failure;
+  if (!tokenHash) {
+    console.warn('[auth/confirm] callback hit with no token_hash');
+    return failure;
+  }
 
   try {
     const { error } = await ctx.verifyOtp({
       token_hash: tokenHash,
       type: resolveType(ctx.params.get('type')),
     });
-    if (error) return failure;
-  } catch {
+    if (error) {
+      console.warn('[auth/confirm] verifyOtp rejected the token', error);
+      return failure;
+    }
+  } catch (err) {
+    console.error('[auth/confirm] verifyOtp threw', err);
     return failure;
   }
 
@@ -653,7 +703,7 @@ export async function handleAuthConfirm(ctx: AuthConfirmContext): Promise<AuthCo
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run test/auth-confirm.test.ts`
-Expected: PASS (the `it.each` expands to 4 cases; 10 assertions total).
+Expected: PASS — 10 tests (the `it.each` expands to 4 unsafe-`next` cases).
 
 - [ ] **Step 5: Full test run, format, lint, typecheck**
 
@@ -669,7 +719,8 @@ feat: add the pure /auth/confirm redirect handler
 
 handleAuthConfirm verifies token_hash via an injected verifyOtp, guards
 the `next` param against open redirects, and falls back to
-/login?error=link on any failure.
+/login?error=link on any failure — logging warn/error at the boundary
+like handleTmdbRequest, never swallowing.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
@@ -714,6 +765,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   return response;
 });
 ```
+
+The middleware has **no `try`/`catch`**. `resolveUser` already logs and degrades to `null`; a throw from `serverClient()` (missing `PUBLIC_SUPABASE_*`) is meant to propagate and fail the request loudly — do not wrap it.
 
 - [ ] **Step 2: Typecheck and build**
 
@@ -796,8 +849,12 @@ export const prerender = false;
 export const POST: APIRoute = async ({ cookies, request }) => {
   const headers = new Headers();
   const supabase = serverClient(cookies, request.headers, headers);
-  await supabase.auth.signOut();
 
+  const { error } = await supabase.auth.signOut();
+  if (error) console.error('[api/auth/signout] signOut failed', error);
+
+  // Redirect regardless — the user asked to leave; a failed signOut is logged,
+  // and /login will re-check the session.
   headers.set('Location', LOGIN_PATH);
   return new Response(null, { status: 303, headers });
 };
@@ -901,6 +958,7 @@ if (Astro.locals.user) return Astro.redirect(HOME_PATH);
           });
 
           if (error) {
+            console.error('[login] signInWithOtp failed', error);
             status.textContent = error.message;
             if (button) button.disabled = false;
             return;
@@ -973,6 +1031,8 @@ const { data: shelves, error } = await supabase
   .select('id, name, slug, accent_color, is_public')
   .eq('owner', user.sub)
   .order('created_at', { ascending: true });
+
+if (error) console.error('[index] shelves query failed', error);
 ---
 
 <!doctype html>
@@ -1117,6 +1177,7 @@ Studio. Start `npm run dev`.
 7. Click **Sign out** → back at `/login`; opening `/` again redirects to `/login`.
 8. Open `http://localhost:3000/auth/confirm` with no query string → redirected to `/login?error=link` and the page shows "That link didn’t work — request a new one."
 9. While signed in, open `http://localhost:3000/login` → redirected to `/`.
+10. Watch the `npm run dev` console for the whole run: step 8 prints a `[auth/confirm]` warn line; a page load while signed in prints nothing; if you tamper with the `sb-*-auth-token` cookie and reload `/`, a `[auth/session]` line appears. No failure passes without a log line.
 
 - [ ] **Step 5: Record the checklist result**
 
@@ -1150,6 +1211,7 @@ fix the underlying task before merging.
 | Unit tests mirroring `tmdb-proxy.test.ts` | 2, 4, 5 |
 | Manual E2E checklist incl. cross-device | 10 |
 | `supabase/README.md` auth section | 10 |
+| Decision 7 — observability: log every failure, swallow none | 4 (`resolveUser` warn/error), 5 (`handleAuthConfirm` warn/error), 6 (no catch; propagate config throw), 7 (`signOut` error logged), 8 (`[login]` console.error), 9 (`[index]` console.error); unit-asserted in 4 & 5; manually observed in 10 step 10 |
 
 No spec requirement is left without a task.
 
