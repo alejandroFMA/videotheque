@@ -1,0 +1,68 @@
+---
+import { HOME_PATH } from '../constants';
+
+export const prerender = false;
+
+if (Astro.locals.user) return Astro.redirect(HOME_PATH);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Sign in · Videothèque</title>
+  </head>
+  <body>
+    <main>
+      <h1>Videothèque</h1>
+      <form id="login-form">
+        <label>
+          Email
+          <input type="email" name="email" autocomplete="email" required />
+        </label>
+        <button type="submit">Send me a link</button>
+      </form>
+      <p id="login-status" role="status" aria-live="polite"></p>
+    </main>
+
+    <script>
+      import { browserClient } from '../lib/supabase';
+      import { CONFIRM_PATH } from '../constants';
+
+      const form = document.querySelector<HTMLFormElement>('#login-form');
+      const status = document.querySelector<HTMLParagraphElement>('#login-status');
+
+      if (form && status) {
+        if (new URLSearchParams(location.search).get('error') === 'link') {
+          status.textContent = 'That link didn’t work — request a new one.';
+        }
+
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const email = String(new FormData(form).get('email') ?? '').trim();
+          if (!email) return;
+
+          const button = form.querySelector('button');
+          if (button) button.disabled = true;
+          status.textContent = 'Sending…';
+
+          const { error } = await browserClient().auth.signInWithOtp({
+            email,
+            options: { emailRedirectTo: `${location.origin}${CONFIRM_PATH}` },
+          });
+
+          if (error) {
+            console.error('[login] signInWithOtp failed', error);
+            status.textContent = error.message;
+            if (button) button.disabled = false;
+            return;
+          }
+
+          form.hidden = true;
+          status.textContent = `Check ${email} for a sign-in link.`;
+        });
+      }
+    </script>
+  </body>
+</html>
