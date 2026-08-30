@@ -174,6 +174,13 @@ http://127.0.0.1:54324 — no real delivery. The local API URL and anon key come
 from `supabase status`. Against the hosted project, real email is sent to the
 address you enter.
 
+The `token_hash` link that `/auth/confirm` expects is wired up for local in
+`config.toml` (`[auth.email.template.confirmation]` and `[auth.email.template.magic_link]`
+→ `templates/confirm.html`); run `supabase stop && supabase start` after changing
+either. Open the app at `http://127.0.0.1:3000` (not `localhost`) so the session
+cookie set on the callback is read back on the same origin. Each link is
+single-use and expires after `otp_expiry`; request a fresh one per attempt.
+
 ## Apply to a hosted project
 
 ```bash
