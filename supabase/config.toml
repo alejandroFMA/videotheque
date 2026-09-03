@@ -159,7 +159,12 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# signInWithOtp sends emailRedirectTo from the browser origin; both host spellings
+# are listed so a link opened on either resolves.
+additional_redirect_urls = [
+  "http://127.0.0.1:3000/auth/confirm",
+  "http://localhost:3000/auth/confirm",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -229,8 +234,24 @@ secure_password_change = false
 max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
-# Number of seconds before the email OTP expires (defaults to 1 hour).
-otp_expiry = 3600
+# Number of seconds before the email OTP expires (defaults to 1 hour, max 604800
+# = 1 week). Set to a week for a roomy local sign-in window; templates/confirm.html
+# quotes "one week" — keep them in step.
+otp_expiry = 604800
+
+# The app verifies the link server-side with verifyOtp({ token_hash, type }) in
+# src/pages/auth/confirm.ts. The stock templates use {{ .ConfirmationURL }},
+# which drives the PKCE ?code flow instead and never reaches /auth/confirm.
+# signInWithOtp sends the confirmation template to a new email and the magic_link
+# template to an existing one, so both are overridden. The hosted project needs
+# the same edit in Authentication -> Email Templates (see supabase/README.md).
+[auth.email.template.confirmation]
+subject = "Your sign-in link"
+content_path = "./supabase/templates/confirm.html"
+
+[auth.email.template.magic_link]
+subject = "Your sign-in link"
+content_path = "./supabase/templates/confirm.html"
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]

@@ -19,7 +19,10 @@ if (
 export default defineConfig({
   output: 'server',
   adapter: vercel(),
-  server: { port: 3000 },
+  // Bind IPv4 explicitly: the default `localhost` binds IPv6 `::1` only on
+  // Windows, so the `http://127.0.0.1:3000` the Supabase magic-link callback
+  // redirects to fails to connect. Matches `site_url` in supabase/config.toml.
+  server: { host: '127.0.0.1', port: 3000 },
   env: {
     schema: {
       // `access: 'secret'` keeps this a genuine runtime read: not inlined into
