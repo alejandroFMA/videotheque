@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Branch for this work: `chore/dev-tooling-and-rules` (already checked out). Conventional-commit subjects; keep the `Co-Authored-By:` / `Claude-Session:` trailers already used in this repo's history.
+- Branch for this work: `chore/dev-tooling-and-rules` (already checked out). Conventional-commit subjects; keep the `Co-Authored-By:` trailer already used in this repo's history. Never add a session link — see `.claude/.rules/commit-messages.md`.
 - Rules live in `.claude/.rules/`; `CLAUDE.md` activates them with `@`-imports under a `## Ways of working` section.
 - ESLint: flat config `eslint.config.js` (ESM), **non-type-checked** presets. `no-magic-numbers` = `'warn'` with `{ ignore: [-1, 0, 1], ignoreArrayIndexes: true, ignoreDefaultValues: true, enforceConst: true }`; turned **off** for `test/**` and config files. Warnings must NOT fail the command (`eslint .`, no `--max-warnings`).
 - Prettier `.prettierrc` (JSON): `singleQuote: true`, `semi: true`, `trailingComma: "all"`, `printWidth: 100`, `plugins: ["prettier-plugin-astro"]`.
@@ -84,8 +84,8 @@ No automated test — verified by file existence and `git grep` checks.
   trailing period, aim for 72 characters or fewer.
 - Body: optional, one or two sentences on what changed and why. Not a
   changelog.
-- Keep the `Co-Authored-By:` and `Claude-Session:` trailers this repo
-  already uses.
+- Keep the `Co-Authored-By:` trailer this repo already uses. It credits
+  the work without pointing at a transcript.
 ```
 
 - [ ] **Step 4: Create `.claude/.rules/comments.md`**
