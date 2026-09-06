@@ -1,3 +1,6 @@
+import { errorJson, json } from './http';
+import type { TmdbMovie } from './tmdb-mapping';
+
 export interface TmdbRequestContext {
   searchParams: URLSearchParams;
   method: string;
@@ -7,17 +10,8 @@ export interface TmdbRequestContext {
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-function json(body: unknown, status: number, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
-}
-
-/** Like `json()` but marks the response uncacheable — every 4xx/5xx goes through here. */
-function errorJson(body: unknown, status: number, headers: Record<string, string> = {}): Response {
-  return json(body, status, { 'Cache-Control': 'no-store', ...headers });
-}
+const MOVIE_S_MAXAGE = 86400;
+const SEARCH_S_MAXAGE = 600;
 
 /** Build the upstream TMDB URL for a whitelisted op, or null if params are invalid. */
 function buildUpstreamUrl(op: 'search' | 'movie', params: URLSearchParams): string | null {
@@ -41,6 +35,37 @@ function buildUpstreamUrl(op: 'search' | 'movie', params: URLSearchParams): stri
   return u.toString();
 }
 
+/** An upstream failure, which callers answer with 502. */
+export class TmdbUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'TmdbUnavailableError';
+  }
+}
+
+export async function fetchTmdbMovie(
+  id: number,
+  token: string,
+  fetchImpl: typeof globalThis.fetch,
+): Promise<TmdbMovie> {
+  const url = buildUpstreamUrl('movie', new URLSearchParams({ id: String(id) }));
+  if (!url) throw new TmdbUnavailableError(`invalid tmdb id ${id}`);
+
+  let res: Response;
+  try {
+    res = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+  } catch (err) {
+    throw new TmdbUnavailableError(`tmdb transport failure: ${String(err)}`);
+  }
+  if (!res.ok) throw new TmdbUnavailableError(`tmdb responded ${res.status}`, res.status);
+  return (await res.json()) as TmdbMovie;
+}
+
 export async function handleTmdbRequest(ctx: TmdbRequestContext): Promise<Response> {
   // HEAD is GET without a body (RFC 9110); the transport strips the body for us.
   if (ctx.method !== 'GET' && ctx.method !== 'HEAD') {
@@ -59,6 +84,20 @@ export async function handleTmdbRequest(ctx: TmdbRequestContext): Promise<Respon
   const upstreamUrl = buildUpstreamUrl(op, ctx.searchParams);
   if (!upstreamUrl) {
     return errorJson({ error: op === 'search' ? 'query required' : 'id required' }, 400);
+  }
+
+  if (op === 'movie') {
+    try {
+      const movie = await fetchTmdbMovie(Number(ctx.searchParams.get('id')), ctx.token, ctx.fetch);
+      return json(movie, 200, { 'Cache-Control': `public, s-maxage=${MOVIE_S_MAXAGE}` });
+    } catch (err) {
+      // An upstream 404 is the client's answer, not an outage.
+      if (err instanceof TmdbUnavailableError && err.status === 404) {
+        return errorJson({ error: 'not found' }, 404);
+      }
+      console.error('[api/tmdb] movie lookup failed', err);
+      return errorJson({ error: 'tmdb upstream' }, 502);
+    }
   }
 
   let upstream: Response;
@@ -87,6 +126,5 @@ export async function handleTmdbRequest(ctx: TmdbRequestContext): Promise<Respon
     return errorJson({ error: 'tmdb upstream' }, 502);
   }
 
-  const sMaxAge = op === 'movie' ? 86400 : 600;
-  return json(body, 200, { 'Cache-Control': `public, s-maxage=${sMaxAge}` });
+  return json(body, 200, { 'Cache-Control': `public, s-maxage=${SEARCH_S_MAXAGE}` });
 }

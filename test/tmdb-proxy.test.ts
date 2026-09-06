@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { handleTmdbRequest, type TmdbRequestContext } from '../src/lib/tmdb-proxy';
+import {
+  fetchTmdbMovie,
+  handleTmdbRequest,
+  TmdbUnavailableError,
+  type TmdbRequestContext,
+} from '../src/lib/tmdb-proxy';
 
 const searchFixture = JSON.parse(
   readFileSync(new URL('./fixtures/tmdb-search-matrix.json', import.meta.url), 'utf8'),
@@ -183,5 +188,33 @@ describe('handleTmdbRequest — upstream failures', () => {
     const res = await handleTmdbRequest(ctx);
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: 'tmdb upstream' });
+  });
+});
+
+describe('fetchTmdbMovie', () => {
+  it('requests the movie with credits appended and returns the parsed body', async () => {
+    const fetchMock = okJson(movieFixture);
+    const movie = await fetchTmdbMovie(603, 'test-token', fetchMock);
+
+    expect(movie.id).toBe(movieFixture.id);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.themoviedb.org/3/movie/603?append_to_response=credits');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer test-token');
+  });
+
+  it('throws TmdbUnavailableError carrying the upstream status on a non-2xx', async () => {
+    await expect(fetchTmdbMovie(603, 'test-token', failStatus(404))).rejects.toBeInstanceOf(
+      TmdbUnavailableError,
+    );
+    await expect(fetchTmdbMovie(603, 'test-token', failStatus(500))).rejects.toMatchObject({
+      status: 500,
+    });
+  });
+
+  it('throws TmdbUnavailableError when the transport itself fails', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('ECONNRESET'));
+    await expect(fetchTmdbMovie(603, 'test-token', fetchMock)).rejects.toBeInstanceOf(
+      TmdbUnavailableError,
+    );
   });
 });

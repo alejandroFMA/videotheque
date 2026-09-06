@@ -16,6 +16,10 @@ order the owner sets by dragging. Visual reference: thecriterioncloset.com
   shelf itself stays CSS/DOM). See
   `docs/superpowers/specs/2026-08-29-shelf-visual-direction-design.md`.
 - Deployed on Vercel
+- The interface is in Castilian Spanish for v1. Code, comments, identifiers,
+  specs and commit messages stay in English. Every user-facing string lives in
+  `src/constants/`, never inline in a component — which is what would make a
+  second language possible later without hunting through markup.
 
 ## Structure
 
@@ -50,8 +54,10 @@ Three tables, normalised from the start. Full SQL with policies lives in
   anyone adds that film, written by that user's browser with the anon key.
 - `shelves`: a user owns one or more themed shelves; sign-up seeds the first.
   `name` labels a shelf, `accent_color` tints it, `slug` drives the public URL,
-  `is_public` controls access without a session. The ~20-films-per-shelf cap is
-  a client concern, not a database constraint.
+  `is_public` controls access without a session. The 20-films-per-shelf cap is
+  `SHELF_CAPACITY` in `src/constants/`, enforced by
+  `POST /api/shelves/[id]/films` with a `409`. It is still not a database
+  constraint, so raising it stays a one-constant change.
 - `shelf_items`: composite primary key (shelf_id, film_id). `position` is the
   display order within the shelf: `place_film` sets it when the film is added,
   `reorder_shelf` rewrites it on drag-and-drop. It is never shown, and gaps
@@ -71,6 +77,10 @@ Rules that do not bend:
 - **Spine colour is computed once**, in the browser of the first user to add
   the film, from the public poster, and stored in `films.spine_color`. It is
   not recomputed afterwards.
+- **The browser is trusted with the spine colour and nothing else.** Every
+  other `films` field is fetched from TMDB server-side by
+  `POST /api/shelves/[id]/films`. The cache is global, so one client's bad row
+  would be every shelf's bad row.
 
 Reading a shelf takes one call: PostgREST follows the foreign key with
 `.select('position, films(*)')`. The join is not written by hand.
@@ -78,8 +88,11 @@ Reading a shelf takes one call: PostgREST follows the foreign key with
 ## Rejected decisions, and why
 
 - **Mongo**: the data is relational and would need manual joins. Postgres also
-  gives row level security, which is what lets the browser talk straight to the
-  database without an API layer policing permissions.
+  gives row level security, which is what lets the browser read straight from
+  the database without an API layer policing permissions. Writes turned out to
+  need one anyway — the session lives in server-managed cookies, so mutations
+  go through `src/pages/api/shelves/` with RLS as the backstop — but the
+  relational argument is untouched.
 - **One JSON blob per user instead of tables**: simpler for two people, but it
   loses the shared film cache and forces a migration later.
 - **Monorepo**: there is a single package. Workspaces add configuration without
