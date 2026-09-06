@@ -1,0 +1,126 @@
+---
+import { THEME_TO_DARK_LABEL } from '../constants';
+---
+
+<button id="theme-toggle" type="button" aria-label={THEME_TO_DARK_LABEL}>
+  <svg class="moon" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+  </svg>
+  <svg class="sun" viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="4"></circle>
+    <path
+      d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+    ></path>
+  </svg>
+</button>
+
+<style>
+  button {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    color: var(--muted);
+    cursor: pointer;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  button:hover {
+    color: var(--ink);
+    border-color: var(--hairline);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* The icon shows the theme you would switch *to*, so the moon is the default
+     and the sun only appears once dark is actually in effect — whether that
+     came from the system or from an explicit choice. */
+  .sun {
+    display: none;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .moon {
+      display: none;
+    }
+
+    :root:not([data-theme='light']) .sun {
+      display: block;
+    }
+  }
+
+  :root[data-theme='dark'] .moon {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .sun {
+    display: block;
+  }
+
+  :root[data-theme='light'] .moon {
+    display: block;
+  }
+
+  :root[data-theme='light'] .sun {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    button {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  import {
+    THEME_DARK,
+    THEME_LIGHT,
+    THEME_STORAGE_KEY,
+    THEME_TO_DARK_LABEL,
+    THEME_TO_LIGHT_LABEL,
+  } from '../constants';
+
+  const button = document.querySelector<HTMLButtonElement>('#theme-toggle');
+
+  if (button) {
+    const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    const isDark = () => {
+      const chosen = document.documentElement.getAttribute('data-theme');
+      return chosen ? chosen === THEME_DARK : prefersDark();
+    };
+
+    const label = () => (isDark() ? THEME_TO_LIGHT_LABEL : THEME_TO_DARK_LABEL);
+    button.setAttribute('aria-label', label());
+
+    button.addEventListener('click', () => {
+      const next = isDark() ? THEME_LIGHT : THEME_DARK;
+      document.documentElement.setAttribute('data-theme', next);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {
+        // Private mode or blocked storage: the choice still applies to this page.
+      }
+      button.setAttribute('aria-label', label());
+    });
+  }
+</script>

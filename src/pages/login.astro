@@ -1,74 +1,308 @@
 ---
-import { HOME_PATH } from '../constants';
+import Layout from '../layouts/Layout.astro';
+import Wordmark from '../components/Wordmark.astro';
+import {
+  AUTH_EMAIL_LABEL,
+  AUTH_PAGE_TITLE,
+  AUTH_PITCH,
+  AUTH_SIGN_IN,
+  AUTH_SIGN_UP,
+  AUTH_SUBMIT_SIGN_IN,
+  HOME_PATH,
+} from '../constants';
 
 export const prerender = false;
 
 if (Astro.locals.user) return Astro.redirect(HOME_PATH);
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <title>Sign in · Videothèque</title>
-  </head>
-  <body>
-    <main>
-      <h1>Videothèque</h1>
-      <form id="login-form">
-        <label>
-          Email
-          <input type="email" name="email" autocomplete="email" required />
+<Layout title={AUTH_PAGE_TITLE}>
+  <div class="page">
+    <div class="intro">
+      <Wordmark />
+
+      <p class="pitch">
+        {
+          AUTH_PITCH.map(([verb, rest]) => (
+            <span>
+              <b>{verb}</b> {rest}
+            </span>
+          ))
+        }
+      </p>
+    </div>
+
+    <form id="login-form">
+      <fieldset class="modes">
+        <legend class="sr-only">{AUTH_PAGE_TITLE}</legend>
+        <label class="mode">
+          <input type="radio" name="mode" value="signin" checked />
+          <span>{AUTH_SIGN_IN}</span>
         </label>
-        <button type="submit">Send me a link</button>
-      </form>
-      <p id="login-status" role="status" aria-live="polite"></p>
-    </main>
+        <label class="mode">
+          <input type="radio" name="mode" value="signup" />
+          <span>{AUTH_SIGN_UP}</span>
+        </label>
+      </fieldset>
 
-    <script>
-      import { browserClient } from '../lib/supabase';
-      import { CONFIRM_PATH } from '../constants';
+      <label class="field">
+        <span class="sr-only">{AUTH_EMAIL_LABEL}</span>
+        <input
+          type="email"
+          name="email"
+          autocomplete="email"
+          placeholder={AUTH_EMAIL_LABEL}
+          required
+        />
+      </label>
 
-      const form = document.querySelector<HTMLFormElement>('#login-form');
-      const status = document.querySelector<HTMLParagraphElement>('#login-status');
+      <button id="login-submit" type="submit">{AUTH_SUBMIT_SIGN_IN}</button>
+    </form>
 
-      if (form && status) {
-        if (new URLSearchParams(location.search).get('error') === 'link') {
-          status.textContent = 'That link didn’t work — request a new one.';
+    <p id="login-status" class="status" role="status" aria-live="polite"></p>
+  </div>
+</Layout>
+
+<style>
+  .page {
+    width: 100%;
+    margin: auto;
+    padding: 48px 0;
+  }
+
+  /* Wider than the form column: at full size the wordmark is far broader than
+     the 400px the inputs want, and would otherwise overflow it. */
+  .intro {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  #login-form,
+  .status {
+    width: 100%;
+    max-width: 400px;
+    margin-inline: auto;
+  }
+
+  /* Two weights on one uppercase line: the verbs carry the three actions, the
+     rest of each clause recedes. */
+  .pitch {
+    margin: 14px 0 46px;
+    text-align: center;
+    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.85;
+    letter-spacing: 0.11em;
+    color: var(--muted);
+    text-wrap: balance;
+  }
+
+  .pitch b {
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* A separator is presentation, so it lives here rather than inside the copy —
+     and trailing the clause keeps it from being orphaned onto a wrapped line. */
+  .pitch span:not(:last-child)::after {
+    content: '·';
+    margin-inline: 0.62em;
+    font-size: 1.15em;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .modes {
+    display: flex;
+    gap: 4px;
+    margin: 0 0 6px;
+    padding: 4px;
+    border: 0;
+    border-radius: var(--radius);
+    background: var(--track);
+  }
+
+  .mode {
+    flex: 1;
+  }
+
+  /* The radio stays the control; only its label is painted. `display: none`
+     would drop it out of the tab order. */
+  .mode input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .mode span {
+    display: block;
+    padding: 9px 10px;
+    border-radius: 5px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease;
+  }
+
+  /* The ring is a box-shadow, not a border: a border only on the checked state
+     would shift the other segment by a pixel as the selection moves. */
+  .mode input:checked + span {
+    background: var(--thumb);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow:
+      0 0 0 1px var(--hairline),
+      0 1px 3px rgba(0, 0, 0, 0.16);
+  }
+
+  .mode input:focus-visible + span {
+    outline: 2px solid var(--brass);
+    outline-offset: 2px;
+  }
+
+  .field input {
+    width: 100%;
+    padding: 13px 15px;
+    background: var(--field);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    font-size: 15px;
+  }
+
+  .field input::placeholder {
+    color: var(--muted);
+  }
+
+  .field input:focus {
+    border-color: var(--ink);
+    outline: none;
+  }
+
+  button {
+    padding: 14px;
+    background: var(--ink);
+    color: var(--wall);
+    border: 0;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  button:hover:not(:disabled) {
+    opacity: 0.86;
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .status {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  .status:empty {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mode span,
+    button {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  import { browserClient } from '../lib/supabase';
+  import {
+    AUTH_EMAIL_TOKEN,
+    AUTH_LINK_EXPIRED,
+    AUTH_NO_ACCOUNT,
+    AUTH_SEND_FAILED,
+    AUTH_SENDING,
+    AUTH_SENT,
+    AUTH_SUBMIT_SIGN_IN,
+    AUTH_SUBMIT_SIGN_UP,
+    CONFIRM_PATH,
+    SUPABASE_OTP_DISABLED,
+  } from '../constants';
+
+  const SIGN_UP = 'signup';
+
+  const form = document.querySelector<HTMLFormElement>('#login-form');
+  const status = document.querySelector<HTMLParagraphElement>('#login-status');
+  const submit = document.querySelector<HTMLButtonElement>('#login-submit');
+
+  if (form && status && submit) {
+    const wantsSignUp = () => new FormData(form).get('mode') === SIGN_UP;
+
+    if (new URLSearchParams(location.search).get('error') === 'link') {
+      status.textContent = AUTH_LINK_EXPIRED;
+    }
+
+    const syncSubmitLabel = () => {
+      submit.textContent = wantsSignUp() ? AUTH_SUBMIT_SIGN_UP : AUTH_SUBMIT_SIGN_IN;
+    };
+
+    // Also on load, not only on change: browsers restore the checked radio
+    // across a reload, which would otherwise leave the server-rendered label
+    // describing the wrong mode.
+    syncSubmitLabel();
+    form.addEventListener('change', syncSubmitLabel);
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const email = String(new FormData(form).get('email') ?? '').trim();
+      if (!email) return;
+
+      const signingUp = wantsSignUp();
+      submit.disabled = true;
+      status.textContent = AUTH_SENDING;
+
+      try {
+        const { error } = await browserClient().auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: `${location.origin}${CONFIRM_PATH}`,
+            // Entering with an unknown address must fail rather than quietly
+            // opening an account the person did not ask for.
+            shouldCreateUser: signingUp,
+          },
+        });
+
+        if (error) {
+          console.error('[login] signInWithOtp failed', error);
+          status.textContent =
+            !signingUp && error.code === SUPABASE_OTP_DISABLED ? AUTH_NO_ACCOUNT : AUTH_SEND_FAILED;
+          submit.disabled = false;
+          return;
         }
 
-        form.addEventListener('submit', async (event) => {
-          event.preventDefault();
-          const email = String(new FormData(form).get('email') ?? '').trim();
-          if (!email) return;
-
-          const button = form.querySelector('button');
-          if (button) button.disabled = true;
-          status.textContent = 'Sending…';
-
-          try {
-            const { error } = await browserClient().auth.signInWithOtp({
-              email,
-              options: { emailRedirectTo: `${location.origin}${CONFIRM_PATH}` },
-            });
-
-            if (error) {
-              console.error('[login] signInWithOtp failed', error);
-              status.textContent = error.message;
-              if (button) button.disabled = false;
-              return;
-            }
-
-            form.hidden = true;
-            status.textContent = `Check ${email} for a sign-in link.`;
-          } catch (err) {
-            console.error('[login] signInWithOtp threw', err);
-            status.textContent = 'Something went wrong — try again.';
-            if (button) button.disabled = false;
-          }
-        });
+        form.hidden = true;
+        status.textContent = AUTH_SENT.replace(AUTH_EMAIL_TOKEN, email);
+      } catch (err) {
+        console.error('[login] signInWithOtp threw', err);
+        status.textContent = AUTH_SEND_FAILED;
+        submit.disabled = false;
       }
-    </script>
-  </body>
-</html>
+    });
+  }
+</script>
