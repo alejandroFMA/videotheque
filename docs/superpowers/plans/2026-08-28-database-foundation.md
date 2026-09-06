@@ -28,9 +28,8 @@
 - The `films` insert policy stays `to authenticated with check (true)` — the client writes the cache with the anon key (trust-based for v1).
 - `schema.sql` at the repo root is deleted once its content lives in the migration.
 - `auth.uid()` in policies stays wrapped as `(select auth.uid())` so Postgres evaluates it once per query.
-- Commit after every task. Every commit message ends with these two trailer lines:
+- Commit after every task. Every commit message ends with this trailer line:
   - `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`
-  - `Claude-Session: https://claude.ai/code/session_015xpiXcahMVeNKrnY6TKoph`
 
 ## Prerequisites (one-time, before Task 1)
 
@@ -349,8 +348,7 @@ git commit -m "Add Supabase scaffold and base schema" \
 verification harness covering the trigger, anon shelf visibility, and the
 anon films-write block. shelf_items.position is documented as display
 order, not a spine number." \
-  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" \
-  -m "Claude-Session: https://claude.ai/code/session_015xpiXcahMVeNKrnY6TKoph"
+  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -470,8 +468,7 @@ row's actual stored position, so a repeat call returns the existing
 position instead of a fresh computed one. Verified: first call returns 1,
 repeat returns 1 with no new row, and a cross-owner call is blocked by
 RLS." \
-  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" \
-  -m "Claude-Session: https://claude.ai/code/session_015xpiXcahMVeNKrnY6TKoph"
+  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -590,8 +587,7 @@ git commit -m "Add reorder_shelf function" \
 one call, using unnest ... with ordinality. security invoker, so the
 update is filtered by RLS. Verified: the owner's array reorders all three
 rows, and a non-owner call leaves positions untouched." \
-  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" \
-  -m "Claude-Session: https://claude.ai/code/session_015xpiXcahMVeNKrnY6TKoph"
+  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -705,8 +701,7 @@ git commit -m "Update CLAUDE.md for drag-and-drop ordering" \
 set by place_film and rewritten by reorder_shelf. Notes the client writes
 the films cache with the anon key, and that spine colour is computed in
 the first adder's browser." \
-  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" \
-  -m "Claude-Session: https://claude.ai/code/session_015xpiXcahMVeNKrnY6TKoph"
+  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -796,8 +791,7 @@ git commit -m "Remove draft schema.sql, document Supabase workflow" \
   -m "The versioned migration under supabase/migrations/ is now the only
 schema source. Adds supabase/README.md with the local dev, verification,
 and db push steps." \
-  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" \
-  -m "Claude-Session: https://claude.ai/code/session_015xpiXcahMVeNKrnY6TKoph"
+  -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 - [ ] **Step 6: Stop the local stack (optional)**

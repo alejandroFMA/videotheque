@@ -20,7 +20,7 @@
 - **Testable logic lives in plain `.ts` modules** with injected dependencies (the `src/lib/tmdb-proxy.ts` pattern); `.astro` and `src/pages/**` files stay thin wrappers.
 - **Observability — log every failure, swallow none.** Every `catch` and every error branch that returns a fallback first calls `console.warn('[tag] …', detail)` (routine: expired/invalid JWT, unverifiable magic link, missing `token_hash`) or `console.error('[tag] …', err)` (unexpected: a thrown exception, `signOut()` error, a failed DB query). Tags: `[auth/session]`, `[auth/confirm]`, `[middleware]`, `[api/auth/signout]`, `[index]`, `[login]`. The fallback behaviour (anonymous render, `/login?error=link`) stays — it just never happens silently. The **only** deliberate uncaught throw is missing `PUBLIC_SUPABASE_*` (`serverClient()` throws; a broken deployment must fail loudly). `console` is the sink — Vercel captures it; no logger dependency.
 - **CI gate (must stay green):** `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, in that order.
-- **Commit messages:** Conventional Commits, imperative subject ≤72 chars, keep the `Co-Authored-By:` and `Claude-Session:` trailers this repo uses.
+- **Commit messages:** Conventional Commits, imperative subject ≤72 chars, keep the `Co-Authored-By:` trailer this repo uses; never add a session link (see `.claude/.rules/commit-messages.md`).
 
 ---
 
@@ -158,7 +158,6 @@ Supabase env vars via astro:env, type App.Locals, and add the shared
 auth route constants.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
@@ -299,7 +298,6 @@ makeCookieAdapter bridges a request Cookie header, Astro's cookies.set,
 and a response Headers object for the no-store cache headers.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
@@ -382,7 +380,6 @@ browserClient wraps createBrowserClient. Both throw a clear error when
 the public env vars are missing.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
@@ -524,7 +521,6 @@ resolveUser calls getClaims and returns the claims or null, degrading to
 console.error on a thrown one, never silently.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
@@ -723,7 +719,6 @@ the `next` param against open redirects, and falls back to
 like handleTmdbRequest, never swallowing.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
@@ -796,7 +791,6 @@ Per-request middleware builds the server client, resolves the verified
 user, and flushes any refresh-cookie cache headers onto the response.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
@@ -882,7 +876,6 @@ clears the session and redirects to /login. Both own their response
 headers so the no-store cache headers ride with Set-Cookie.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
@@ -994,7 +987,6 @@ email via signInWithOtp, shows an inbox prompt, and surfaces
 ?error=link.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
@@ -1084,7 +1076,6 @@ index.astro redirects anonymous visitors to /login and server-renders
 the signed-in user's shelves, filtered by owner, with a sign-out form.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
@@ -1152,7 +1143,6 @@ Redirect URL allowlist, the magic-link email template override, and how
 to test links locally via Inbucket.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01FKs6CQEN796cnajnTJ4xA7
 EOF
 )"
 ```
