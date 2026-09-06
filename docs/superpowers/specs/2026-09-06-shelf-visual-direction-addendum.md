@@ -166,7 +166,41 @@ is the failure this rule exists to prevent.
 On mobile the postit labels a stack of planks rather than a single plank. It
 keeps its anchor on the first one.
 
-## 7. Still open
+## 7. The signed-out pages are a different register
+
+Added later the same day, after building `/login`. Everything above describes
+the **app screens** — the shelf and the public profile. The signed-out pages
+deliberately do not follow it:
+
+- No chrome bands: no header at all, and the TMDB attribution floats at the foot
+  of the page rather than sitting in a dark strip.
+- No wood, no plank, and no panel with a surface of its own. The form sits
+  directly on the page.
+- The wordmark _is_ the page — large and centred — rather than a small mark in a
+  bar.
+
+So the rule in section 1 now reads: **chrome is always dark on the app
+screens.** A page with no chrome has none to keep dark.
+
+**That scoping is an assumption, not a settled decision.** The alternative the
+owner raised is carrying this neutral register into the shelf too, which would
+contradict the parent spec's photorealistic direction outright — so it is not
+taken silently here.
+
+### Two changes that are not login-only
+
+These supersede section 3 everywhere, app screens included:
+
+- The light wall is **`#fcfcfc`**, not `#f1ead9`; the cream read as too warm.
+  Ink is `#141414`, muted `#6e6e6e`, and in dark the ink is **pure white**. The
+  wood values are untouched — wood stays warm.
+- The **theme toggle also lives on the signed-out pages**, top right, and not
+  only in the avatar menu as section 3 said: there is no avatar before a
+  session. The choice persists in `localStorage` and is applied by an inline
+  pre-paint guard in the layout head, so a reload does not flash the other
+  theme.
+
+## 8. Still open
 
 Not decided here, and not blocking the shelf:
 
