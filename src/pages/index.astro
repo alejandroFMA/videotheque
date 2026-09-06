@@ -1,21 +1,20 @@
 ---
 import { LOGIN_PATH, SIGNOUT_PATH } from '../constants';
+import { listOwnShelves, type ShelfSummary } from '../lib/shelves';
 
 export const prerender = false;
 
 const { user, supabase } = Astro.locals;
 if (!user) return Astro.redirect(LOGIN_PATH);
 
-// `.eq('owner', user.sub)` is REQUIRED: the shelves SELECT policy also exposes
-// other users' public shelves (for /e/[slug]), so RLS alone would not scope
-// this list to the signed-in user.
-const { data: shelves, error } = await supabase
-  .from('shelves')
-  .select('id, name, slug, accent_color, is_public')
-  .eq('owner', user.sub)
-  .order('created_at', { ascending: true });
-
-if (error) console.error('[index] shelves query failed', error);
+let shelves: ShelfSummary[] = [];
+let loadError: string | null = null;
+try {
+  shelves = await listOwnShelves(supabase, user.sub as string);
+} catch (err) {
+  loadError = err instanceof Error ? err.message : String(err);
+  console.error('[index] shelves query failed', err);
+}
 ---
 
 <!doctype html>
@@ -30,11 +29,11 @@ if (error) console.error('[index] shelves query failed', error);
       <h1>Videothèque</h1>
       <p>Signed in as {user.email}</p>
 
-      {error && <p role="alert">Could not load your shelves: {error.message}</p>}
+      {loadError && <p role="alert">Could not load your shelves: {loadError}</p>}
 
       <ul>
         {
-          (shelves ?? []).map((shelf) => (
+          shelves.map((shelf) => (
             <li>
               <a href={`/e/${shelf.slug}`}>{shelf.name}</a>
               {!shelf.is_public && <span> (private)</span>}

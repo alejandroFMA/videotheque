@@ -14,3 +14,9 @@ export const HTTP_SEE_OTHER = 303;
 // The email template sends `type=email`; the others are accepted defensively.
 export const OTP_TYPES = ['email', 'magiclink', 'recovery'] as const;
 export const DEFAULT_OTP_TYPE: EmailOtpType = 'email';
+
+// Enforced by the endpoint, not by the database.
+export const SHELF_CAPACITY = 20;
+
+export const SHELF_FULL_MESSAGE =
+  'Tienes la estantería llena, crea otra para seguir añadiendo películas';
