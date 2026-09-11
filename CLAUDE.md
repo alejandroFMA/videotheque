@@ -29,11 +29,13 @@ src/
     index.astro        own shelves, requires a session
     e/[slug].astro     anyone's public shelf, no login
     api/tmdb.ts        TMDB proxy
+  layouts/             Layout.astro, the page shell every route renders into
   components/          Shelf, Spine, SearchBar, FilmCase
   lib/                 supabase.ts, tmdb.ts, colors.ts
   types/               cross-cutting interfaces and type aliases
   constants/           cross-cutting constant values
-  styles/
+  styles/              fonts.css, app.css (design tokens, shared chrome)
+public/fonts/          self-hosted woff2 + their licences
 supabase/migrations/   <timestamp>_initial_schema.sql
 ```
 

@@ -1,0 +1,22 @@
+---
+import { WORDMARK } from '../constants';
+---
+
+<h1 class="wordmark">{WORDMARK}</h1>
+
+<style>
+  /* Big Shoulders is already condensed, so it gets size rather than tracking —
+     wide letterspacing throws away the narrowness it was picked for. */
+  .wordmark {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(52px, 13vw, 140px);
+    /* The grave on the È rides above cap height and overflows a tighter line
+       box, so it needs the extra leading rather than 1 or below. */
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+</style>

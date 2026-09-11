@@ -1,0 +1,45 @@
+---
+import { TMDB_ATTRIBUTION, TMDB_LOGO_ALT, TMDB_URL } from '../constants';
+---
+
+<footer>
+  <a href={TMDB_URL} target="_blank" rel="noopener noreferrer">
+    <img src="/tmdb-logo.svg" alt={TMDB_LOGO_ALT} width="104" height="14" />
+  </a>
+  <p>{TMDB_ATTRIBUTION}</p>
+</footer>
+
+<style>
+  /* TMDB's licence requires the mark to stay visible. It floats at the foot of
+     the page rather than sitting in a band. */
+  footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 22px var(--gutter) 26px;
+  }
+
+  a {
+    display: block;
+    line-height: 0;
+    opacity: 0.85;
+  }
+
+  a:hover {
+    opacity: 1;
+  }
+
+  img {
+    display: block;
+    height: 14px;
+    width: auto;
+  }
+
+  p {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+</style>
