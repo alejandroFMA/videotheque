@@ -3,7 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import Header from '../components/Header.astro';
 import { HOME_PAGE_TITLE, LOGIN_PATH, SHELVES_LOAD_FAILED } from '../constants';
 import { getOwnProfile } from '../lib/profiles';
-import { listOwnShelves, type ShelfSummary } from '../lib/shelves';
+import { listOwnShelves, listShelvedFilmIds, type ShelfSummary } from '../lib/shelves';
 
 export const prerender = false;
 
@@ -15,6 +15,7 @@ const email = user.email as string;
 
 let shelves: ShelfSummary[] = [];
 let displayName = email;
+let shelvedIds: number[] = [];
 let loadError: string | null = null;
 try {
   const [profile, ownShelves] = await Promise.all([
@@ -25,6 +26,10 @@ try {
   // wrong at registration — the email is a usable name until settings exists.
   displayName = profile?.display_name ?? email;
   shelves = ownShelves;
+  shelvedIds = await listShelvedFilmIds(
+    supabase,
+    shelves.map((shelf) => shelf.id),
+  );
 } catch (err) {
   loadError = SHELVES_LOAD_FAILED;
   console.error('[index] dashboard query failed', err);
@@ -32,7 +37,7 @@ try {
 ---
 
 <Layout title={HOME_PAGE_TITLE}>
-  <Header slot="header" displayName={displayName} />
+  <Header slot="header" displayName={displayName} shelvedIds={shelvedIds} />
 
   {loadError && <p role="alert">{loadError}</p>}
 

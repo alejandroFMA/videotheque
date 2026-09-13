@@ -1,20 +1,22 @@
 ---
 import AvatarMenu from './AvatarMenu.astro';
+import SearchBar from './SearchBar.astro';
 import ThemeToggle from './ThemeToggle.astro';
 import Wordmark from './Wordmark.astro';
 
 interface Props {
   displayName: string;
+  shelvedIds: number[];
 }
 
-const { displayName } = Astro.props;
+const { displayName, shelvedIds } = Astro.props;
 ---
 
 <header>
   <Wordmark variant="bar" />
 
   <div class="cluster">
-    <div class="search-slot"></div>
+    <div class="search-slot"><SearchBar shelvedIds={shelvedIds} /></div>
     <ThemeToggle />
     <AvatarMenu displayName={displayName} />
   </div>
@@ -49,6 +51,10 @@ const { displayName } = Astro.props;
 
     .cluster {
       flex-wrap: wrap;
+      /* Without an explicit basis the cluster shrinks to fit its children
+         (default flex: 0 1 auto), so search-slot's 100% below resolves
+         against that content-hugging box instead of the wrapped row. */
+      flex-basis: 100%;
     }
 
     .search-slot {

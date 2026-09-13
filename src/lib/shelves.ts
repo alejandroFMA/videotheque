@@ -126,3 +126,12 @@ export async function listOwnShelves(sb: Db, owner: string): Promise<ShelfSummar
   if (error) fail('listOwnShelves', error);
   return (data as ShelfSummary[] | null) ?? [];
 }
+
+/** Every film id already on one of this user's shelves, for the search
+ *  dropdown's "already there" badge. Reads the cache, never TMDB. */
+export async function listShelvedFilmIds(sb: Db, shelfIds: string[]): Promise<number[]> {
+  if (shelfIds.length === 0) return [];
+  const { data, error } = await sb.from('shelf_items').select('film_id').in('shelf_id', shelfIds);
+  if (error) fail('listShelvedFilmIds', error);
+  return ((data as { film_id: number }[] | null) ?? []).map((row) => row.film_id);
+}
