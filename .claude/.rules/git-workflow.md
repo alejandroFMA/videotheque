@@ -11,6 +11,12 @@
 - **Every change that touches the repo gets its own new branch and its own
   PR** — features, fixes, CI tweaks, edits to these rule files, one-liners.
   No exceptions for "small".
+- **A feature's spec and plan ride on that feature's branch**, committed
+  ahead of the code they describe. Do not open a separate `docs/` branch for
+  them: the document and the code it governs belong in one reviewable unit,
+  and splitting them costs two PRs to say one thing. A `docs/` branch is for
+  documentation that stands on its own — these rule files, a README, a spec
+  written with no implementation to follow.
 - `main` moves **only** through a merged PR. Never commit to `main` directly,
   never `git merge` into `main` locally.
 - Branch from an up-to-date `main`; open the PR with `--base main`.
