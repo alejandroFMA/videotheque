@@ -1,4 +1,6 @@
 .env
+# Points the app at the local Supabase stack; overrides .env while it exists.
+.env.local
 .worktrees/
 node_modules/
 .superpowers/
