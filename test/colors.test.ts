@@ -52,4 +52,20 @@ describe('fallbackSpine', () => {
       expect(fallbackSpine(id).spineColor).toMatch(PATTERN);
     }
   });
+
+  it('falls back to white when the id is not a safe integer, since FALLBACK_HUES has no fractional index', () => {
+    const result = fallbackSpine(603.5);
+    expect(result).toEqual({ spineColor: 'hsl(0 0% 100%)', spineDark: false });
+    expect(result.spineColor).toMatch(PATTERN);
+  });
+
+  it('keeps a normal palette colour for a negative integer id, rather than white', () => {
+    const result = fallbackSpine(-7);
+    expect(result.spineColor).toMatch(PATTERN);
+    expect(result.spineColor).not.toBe('hsl(0 0% 100%)');
+  });
+
+  it('the white indeterminate-colour marker itself satisfies the add-film validator', () => {
+    expect(fallbackSpine(Number.NaN).spineColor).toMatch(PATTERN);
+  });
 });

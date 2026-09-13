@@ -34,6 +34,12 @@ const FALLBACK_HUES = [8, 28, 44, 142, 192, 214, 268, 330];
 const FALLBACK_SATURATION = 42;
 const FALLBACK_LIGHTNESS = 40;
 
+// `films.spine_color` is a global cache: one bad write is every user's spine
+// for that film. This is not a derived colour — it is the marker for "no
+// colour could be extracted" — so it deliberately sits outside the 30-58%
+// lightness clamp every real spine obeys; reading as blank is the point.
+const WHITE_SPINE: Spine = { spineColor: 'hsl(0 0% 100%)', spineDark: false };
+
 const BYTES_PER_PIXEL = 4;
 const MAX_BYTE = 255;
 const PERCENT = 100;
@@ -99,6 +105,12 @@ export function spineFromPixels(data: Uint8ClampedArray): Spine {
   }
 
   const [hue, saturation, lightness] = toHsl(red / total, green / total, blue / total);
+  // Unreachable today: total accumulates at least BASE_WEIGHT per pixel, so
+  // this division cannot produce NaN. Kept as a last-resort net so a future
+  // change to the weighting cannot write NaN into a cache every user shares.
+  if (!Number.isFinite(hue) || !Number.isFinite(saturation) || !Number.isFinite(lightness)) {
+    return WHITE_SPINE;
+  }
   return spine(
     hue,
     clamp(saturation, MIN_SATURATION, MAX_SATURATION),
@@ -107,8 +119,11 @@ export function spineFromPixels(data: Uint8ClampedArray): Spine {
 }
 
 /** For a film with no poster, or a poster that will not load. Keyed on the id so
- *  the same film always gets the same colour. */
+ *  the same film always gets the same colour. A non-integer id (e.g. from a
+ *  malformed caller) has no place in FALLBACK_HUES and would otherwise divide
+ *  down to `hsl(NaN ...)`, which the server rejects. */
 export function fallbackSpine(tmdbId: number): Spine {
+  if (!Number.isSafeInteger(tmdbId)) return WHITE_SPINE;
   const hue = FALLBACK_HUES[Math.abs(tmdbId) % FALLBACK_HUES.length];
   return spine(hue, FALLBACK_SATURATION / PERCENT, FALLBACK_LIGHTNESS / PERCENT);
 }
