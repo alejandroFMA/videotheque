@@ -147,13 +147,15 @@ const { shelvedIds } = Astro.props;
   const MIN_QUERY_LENGTH = 2;
   const THUMBNAIL_SIZE = 'w92';
   const YEAR_LENGTH = 4;
+  const OPTION_ID_PREFIX = 'film-result-';
 
+  const container = document.querySelector<HTMLElement>('.search');
   const input = document.querySelector<HTMLInputElement>('#film-search');
   const list = document.querySelector<HTMLUListElement>('#film-results');
   const shelvedScript = document.querySelector<HTMLScriptElement>('#shelved-ids');
   const status = document.querySelector<HTMLElement>('#search-status');
 
-  if (input && list && shelvedScript && status) {
+  if (container && input && list && shelvedScript && status) {
     const shelved = new Set<number>(JSON.parse(shelvedScript.textContent ?? '[]'));
     let results: TmdbSearchResult[] = [];
     let active = -1;
@@ -169,6 +171,7 @@ const { shelvedIds } = Astro.props;
     const close = () => {
       setOpen(false);
       active = -1;
+      input.removeAttribute('aria-activedescendant');
     };
 
     const notice = (text: string) => {
@@ -179,12 +182,14 @@ const { shelvedIds } = Astro.props;
         }),
       );
       setOpen(true);
+      input.removeAttribute('aria-activedescendant');
     };
 
     const paint = () => {
       list.replaceChildren(
         ...results.map((film, index) => {
           const item = document.createElement('li');
+          item.id = `${OPTION_ID_PREFIX}${index}`;
           item.role = 'option';
           item.dataset.index = String(index);
           item.setAttribute('aria-selected', String(index === active));
@@ -232,6 +237,13 @@ const { shelvedIds } = Astro.props;
         }),
       );
       setOpen(true);
+      // A dangling reference confuses some screen readers, so the attribute
+      // is removed rather than set to an empty string when nothing is active.
+      if (active >= 0) {
+        input.setAttribute('aria-activedescendant', `${OPTION_ID_PREFIX}${active}`);
+      } else {
+        input.removeAttribute('aria-activedescendant');
+      }
     };
 
     const run = async (query: string) => {
@@ -252,6 +264,9 @@ const { shelvedIds } = Astro.props;
       window.clearTimeout(timer);
       const query = input.value.trim();
       if (query.length < MIN_QUERY_LENGTH) {
+        // Invalidates a response already in flight; otherwise it lands after
+        // this point and reopens the dropdown over a field the user cleared.
+        latest += 1;
         results = [];
         close();
         return;
@@ -275,6 +290,18 @@ const { shelvedIds } = Astro.props;
     document.addEventListener('pointerdown', (event) => {
       const target = event.target as Node;
       if (!list.hidden && !list.contains(target) && !input.contains(target)) close();
+    });
+
+    // relatedTarget is the element receiving focus; null means focus left the
+    // document (another window), which must not close the dropdown. Checking
+    // against the whole container, not just the input, keeps a click into the
+    // results list (which moves focus there first) from closing it before the
+    // click handler runs.
+    container.addEventListener('focusout', (event) => {
+      const relatedTarget = event.relatedTarget as Node | null;
+      if (!list.hidden && relatedTarget !== null && !container.contains(relatedTarget)) {
+        close();
+      }
     });
   }
 </script>
