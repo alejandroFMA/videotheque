@@ -94,4 +94,22 @@ describe('addFilmToFirstShelfWithRoom', () => {
       reason: 'failed',
     });
   });
+
+  it('reports failed, without rejecting, when a 2xx body is not valid JSON', async () => {
+    const doFetch = vi.fn().mockResolvedValue(new Response('not json', { status: 201 }));
+
+    await expect(addFilmToFirstShelfWithRoom([room('a')], FILM, doFetch)).resolves.toEqual({
+      ok: false,
+      reason: 'failed',
+    });
+  });
+
+  it('reports failed when a 2xx body has no position', async () => {
+    const doFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 201 }));
+
+    expect(await addFilmToFirstShelfWithRoom([room('a')], FILM, doFetch)).toEqual({
+      ok: false,
+      reason: 'failed',
+    });
+  });
 });

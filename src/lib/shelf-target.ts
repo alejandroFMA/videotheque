@@ -24,6 +24,14 @@ function hasRoom(shelf: ShelfSlot): boolean {
   return shelf.filmCount < SHELF_CAPACITY;
 }
 
+function hasNumericPosition(body: unknown): body is { position: number } {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    typeof (body as { position?: unknown }).position === 'number'
+  );
+}
+
 export function firstShelfWithRoom(shelves: ShelfSlot[]): ShelfSlot | null {
   return shelves.find(hasRoom) ?? null;
 }
@@ -49,8 +57,17 @@ export async function addFilmToFirstShelfWithRoom(
     }
 
     if (response.ok) {
-      const { position } = (await response.json()) as { position: number };
-      return { ok: true, shelfId: shelf.id, position };
+      // Parsed separately from the doFetch try/catch above: a malformed
+      // success body is a real bug in the endpoint, distinct from a network
+      // failure, but the caller still only needs to know the add did not work.
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        return { ok: false, reason: 'failed' };
+      }
+      if (!hasNumericPosition(body)) return { ok: false, reason: 'failed' };
+      return { ok: true, shelfId: shelf.id, position: body.position };
     }
     if (response.status !== SHELF_FULL_STATUS) return { ok: false, reason: 'failed' };
   }
