@@ -320,6 +320,19 @@ Recorded here so they survive to the specs that own them.
   gradient forever — and lighting is a decision we will retune by eye many
   times. This also matches the "specular sheen" the addendum already assumed
   when it sized the spine title.
+- **Open question for D: does adding a film need confirming?** Raised by the
+  owner on 2026-09-13 — a "¿Quieres añadir Star Wars a tu colección?" step
+  before the add, guarding against a mis-click. It does not conflict with the
+  no-picker decision, which settled _which shelf_, not _whether_.
+  Not decided. The argument against is that adding is reversible — the remove
+  endpoint exists and a wrong film costs one of twenty slots, recoverable — and
+  a confirmation on a reversible action tends to get clicked through until it
+  protects nothing. The argument for is mobile, where five spine-width rows sit
+  close together under a thumb.
+  What actually motivates it is a gap D closes anyway: today a picked film only
+  flips its row to "Ya en la estantería" and the spine does not appear until a
+  reload. Immediate spine placement plus an undo may remove the felt need for a
+  confirmation entirely. Decide it with the shelf on screen, not before.
 - **Dragging between two shelves needs a new RPC.** `reorder_shelf` reorders
   within one shelf. Cross-shelf movement has no server call today. Belongs to D.
 - **`profiles` needs a public read policy** when `/e/[slug]` or `/u/[handle]`
