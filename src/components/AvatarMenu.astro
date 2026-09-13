@@ -1,0 +1,135 @@
+---
+import { ACCOUNT_MENU_LABEL, SIGN_OUT, SIGNOUT_PATH } from '../constants';
+
+interface Props {
+  displayName: string;
+}
+
+const { displayName } = Astro.props;
+
+const INITIALS_WORDS = 2;
+// A seeded name is the email's local part and has no spaces, so one letter is
+// the normal case until the settings page can set a real name.
+const initials = displayName
+  .split(/\s+/)
+  .filter(Boolean)
+  .slice(0, INITIALS_WORDS)
+  .map((word) => word[0].toUpperCase())
+  .join('');
+---
+
+<div class="account">
+  <button id="avatar-button" type="button" aria-haspopup="menu" aria-expanded="false">
+    <span class="avatar" aria-hidden="true">{initials}</span>
+    <span class="name">{displayName}</span>
+    <span class="sr-only">{ACCOUNT_MENU_LABEL}</span>
+  </button>
+
+  <div id="avatar-menu" role="menu" aria-label={ACCOUNT_MENU_LABEL} hidden>
+    <form method="POST" action={SIGNOUT_PATH}>
+      <button type="submit" role="menuitem">{SIGN_OUT}</button>
+    </form>
+  </div>
+</div>
+
+<style>
+  .account {
+    position: relative;
+  }
+
+  #avatar-button {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  /* A portrait frame rather than chrome, so it keeps its ground in both
+     themes. */
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #3a3430;
+    color: #e8e2da;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .name {
+    font-size: 13px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  #avatar-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 20;
+    min-width: 170px;
+    padding: 5px;
+    background: var(--field);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  }
+
+  #avatar-menu button {
+    width: 100%;
+    padding: 9px 11px;
+    background: none;
+    border: 0;
+    border-radius: 5px;
+    text-align: left;
+    font-size: 13.5px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  #avatar-menu button:hover {
+    background: var(--track);
+  }
+
+  @media (max-width: 640px) {
+    .name {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>('#avatar-button');
+  const menu = document.querySelector<HTMLElement>('#avatar-menu');
+
+  if (button && menu) {
+    const close = () => {
+      menu.hidden = true;
+      button.setAttribute('aria-expanded', 'false');
+    };
+
+    button.addEventListener('click', () => {
+      menu.hidden = !menu.hidden;
+      button.setAttribute('aria-expanded', String(!menu.hidden));
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !menu.hidden) {
+        close();
+        button.focus();
+      }
+    });
+
+    // Pointerdown, not click: a click listener fires after the menu item's own
+    // handler has already run and closed it, which double-toggles.
+    document.addEventListener('pointerdown', (event) => {
+      const target = event.target as Node;
+      if (!menu.hidden && !menu.contains(target) && !button.contains(target)) close();
+    });
+  }
+</script>

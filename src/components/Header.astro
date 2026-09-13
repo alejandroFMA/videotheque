@@ -1,4 +1,5 @@
 ---
+import AvatarMenu from './AvatarMenu.astro';
 import ThemeToggle from './ThemeToggle.astro';
 import Wordmark from './Wordmark.astro';
 
@@ -15,7 +16,7 @@ const { displayName } = Astro.props;
   <div class="cluster">
     <div class="search-slot"></div>
     <ThemeToggle />
-    <span class="name">{displayName}</span>
+    <AvatarMenu displayName={displayName} />
   </div>
 </header>
 
@@ -36,12 +37,6 @@ const { displayName } = Astro.props;
     gap: 12px;
   }
 
-  .name {
-    font-size: 13px;
-    color: var(--ink);
-    white-space: nowrap;
-  }
-
   /* Below this the five elements stop fitting on one line: the cluster wraps,
      the field takes the full width underneath, and the name goes — the avatar
      already identifies the account, and the name is what the field needs the
@@ -59,10 +54,6 @@ const { displayName } = Astro.props;
     .search-slot {
       order: 1;
       flex-basis: 100%;
-    }
-
-    .name {
-      display: none;
     }
   }
 </style>
