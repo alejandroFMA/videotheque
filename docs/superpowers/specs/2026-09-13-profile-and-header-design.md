@@ -243,6 +243,22 @@ two so the arithmetic is testable without a canvas:
 lightness**, which sits inside the already-clamped 30–58% band and decides
 whether the spine title is drawn in bone or ink.
 
+**A colour that comes out indeterminate falls back to white** — added by the
+owner on 2026-09-13, after review found that a non-integer TMDB id indexed the
+fallback palette with a fraction and emitted `hsl(NaN 42% 40%)`, which
+`parseSpineColor` rejects, so the film could not be shelved at all.
+
+White is `hsl(0 0% 100%)`, the one deliberate exception to the 30–58% lightness
+clamp: it is not a derived colour, it is the marker for "no colour could be
+extracted", and reading as blank is the point.
+
+The boundary is narrow and deliberate. **A film with no poster, or whose poster
+fails to load, keeps its id-keyed hue** from the eight-colour palette. Only a
+value that is not a usable colour turns white. Routing the poster-less case to
+white as well would collapse every such film onto one identical blank spine and
+lose the palette's variety across a whole shelf — and films without a poster on
+TMDB are common enough for that to show.
+
 **Then it picks a shelf: the first one with room, top to bottom.** No picker, no
 active-shelf state. The owner's reason is that the films get dragged into order
 afterwards anyway, so the initial landing only has to be reasonable. The
