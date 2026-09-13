@@ -26,11 +26,15 @@ const initials = displayName
   </button>
 
   <div id="avatar-menu" role="menu" aria-label={ACCOUNT_MENU_LABEL} hidden>
-    <form method="POST" action={SIGNOUT_PATH}>
-      <button type="submit" role="menuitem">{SIGN_OUT}</button>
-    </form>
+    <!-- Form sits outside the menu role to maintain correct ARIA parent-child
+         relationship (menu > menuitem). Form-association attribute wires the
+         button to it. Necessary for semantic correctness; will accommodate
+         multiple menu items when Settings is added later. -->
+    <button type="submit" form="sign-out-form" role="menuitem">{SIGN_OUT}</button>
   </div>
 </div>
+
+<form id="sign-out-form" method="POST" action={SIGNOUT_PATH}></form>
 
 <style>
   .account {
@@ -106,8 +110,9 @@ const initials = displayName
 <script>
   const button = document.querySelector<HTMLButtonElement>('#avatar-button');
   const menu = document.querySelector<HTMLElement>('#avatar-menu');
+  const account = document.querySelector<HTMLElement>('.account');
 
-  if (button && menu) {
+  if (button && menu && account) {
     const close = () => {
       menu.hidden = true;
       button.setAttribute('aria-expanded', 'false');
@@ -130,6 +135,16 @@ const initials = displayName
     document.addEventListener('pointerdown', (event) => {
       const target = event.target as Node;
       if (!menu.hidden && !menu.contains(target) && !button.contains(target)) close();
+    });
+
+    // Keyboard navigation: close menu when focus leaves the account container.
+    // relatedTarget is the element receiving focus; null means focus left the
+    // document (user clicked another window/browser chrome), so do not close.
+    account.addEventListener('focusout', (event) => {
+      const relatedTarget = event.relatedTarget as Node | null;
+      if (!menu.hidden && relatedTarget !== null && !account.contains(relatedTarget)) {
+        close();
+      }
     });
   }
 </script>
