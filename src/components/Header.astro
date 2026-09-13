@@ -1,0 +1,68 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+import Wordmark from './Wordmark.astro';
+
+interface Props {
+  displayName: string;
+}
+
+const { displayName } = Astro.props;
+---
+
+<header>
+  <Wordmark variant="bar" />
+
+  <div class="cluster">
+    <div class="search-slot"></div>
+    <ThemeToggle />
+    <span class="name">{displayName}</span>
+  </div>
+</header>
+
+<style>
+  /* No band and no rule: the wall runs unbroken from the top of the page to
+     the bottom, the way Attribution already treats the foot. */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px var(--gutter);
+  }
+
+  .cluster {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .name {
+    font-size: 13px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* Below this the five elements stop fitting on one line: the cluster wraps,
+     the field takes the full width underneath, and the name goes — the avatar
+     already identifies the account, and the name is what the field needs the
+     room from. */
+  @media (max-width: 640px) {
+    header {
+      flex-wrap: wrap;
+      row-gap: 10px;
+    }
+
+    .cluster {
+      flex-wrap: wrap;
+    }
+
+    .search-slot {
+      order: 1;
+      flex-basis: 100%;
+    }
+
+    .name {
+      display: none;
+    }
+  }
+</style>
