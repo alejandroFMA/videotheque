@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FilmRow } from './tmdb-mapping';
+import type { ShelfSlot } from './shelf-target';
 
 type Db = Pick<SupabaseClient, 'from' | 'rpc'>;
 
@@ -24,9 +25,19 @@ export interface ShelfSummary {
   slug: string;
   accent_color: string | null;
   is_public: boolean;
+  /** PostgREST returns an aggregate as a one-element array. */
+  shelf_items: { count: number }[];
 }
 
-const SHELF_SUMMARY_COLUMNS = 'id, name, slug, accent_color, is_public';
+const SHELF_SUMMARY_COLUMNS = 'id, name, slug, accent_color, is_public, shelf_items(count)';
+
+/** The shape the browser's add flow needs: id and how full it is. */
+export function toShelfSlots(shelves: ShelfSummary[]): ShelfSlot[] {
+  return shelves.map((shelf) => ({
+    id: shelf.id,
+    filmCount: shelf.shelf_items[0]?.count ?? 0,
+  }));
+}
 
 function fail(operation: string, error: { message: string }): never {
   throw new Error(`[shelves] ${operation} failed: ${error.message}`);
@@ -125,4 +136,13 @@ export async function listOwnShelves(sb: Db, owner: string): Promise<ShelfSummar
     .order('created_at', { ascending: true });
   if (error) fail('listOwnShelves', error);
   return (data as ShelfSummary[] | null) ?? [];
+}
+
+/** Every film id already on one of this user's shelves, for the search
+ *  dropdown's "already there" badge. Reads the cache, never TMDB. */
+export async function listShelvedFilmIds(sb: Db, shelfIds: string[]): Promise<number[]> {
+  if (shelfIds.length === 0) return [];
+  const { data, error } = await sb.from('shelf_items').select('film_id').in('shelf_id', shelfIds);
+  if (error) fail('listShelvedFilmIds', error);
+  return ((data as { film_id: number }[] | null) ?? []).map((row) => row.film_id);
 }

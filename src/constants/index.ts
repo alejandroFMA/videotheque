@@ -69,3 +69,24 @@ export const AUTH_LINK_EXPIRED = 'Ese enlace ya no sirve. Pide uno nuevo.';
 // Supabase answers `shouldCreateUser: false` for an unknown address with this
 // code; it is the only way to tell "no account" from a real send failure.
 export const SUPABASE_OTP_DISABLED = 'otp_disabled';
+
+export const HOME_PAGE_TITLE = 'Tu estantería · Videothèque';
+
+// Opens with the visible word: an accessible name that does not contain the
+// visible text leaves voice control unable to address the link (WCAG 2.5.3).
+export const HEADER_HOME_LABEL = `${WORDMARK} · ir a tu estantería`;
+
+// The search placeholder is the one string the shelf spec names verbatim.
+export const SEARCH_PLACEHOLDER = 'Busca una película para archivarla';
+export const SEARCH_LABEL = 'Buscar películas';
+export const SEARCH_RESULTS_LABEL = 'Resultados de la búsqueda';
+export const SEARCH_ON_SHELF = 'Ya en la estantería';
+export const SEARCH_EMPTY = 'No hay resultados';
+export const SEARCH_FAILED = 'No se pudo buscar. Inténtalo otra vez.';
+export const SEARCH_ADDING = 'Añadiendo…';
+export const ADD_FAILED = 'No se pudo añadir la película. Inténtalo otra vez.';
+
+export const ACCOUNT_MENU_LABEL = 'Tu cuenta';
+export const SIGN_OUT = 'Cerrar sesión';
+
+export const SHELVES_LOAD_FAILED = 'No se pudieron cargar tus estanterías.';

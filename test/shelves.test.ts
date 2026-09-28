@@ -4,11 +4,13 @@ import {
   ensureFilmCached,
   findOwnShelf,
   listOwnShelves,
+  listShelvedFilmIds,
   placeFilm,
   removeFilm,
   reorderShelf,
   shelfHasFilm,
   shelfItemCount,
+  toShelfSlots,
 } from '../src/lib/shelves';
 
 const SHELF = '11111111-2222-3333-4444-555555555555';
@@ -159,5 +161,42 @@ describe('listOwnShelves', () => {
     expect(sb.opsFor('shelves')).toEqual(
       expect.arrayContaining([['order', 'created_at', { ascending: true }]]),
     );
+  });
+});
+
+describe('toShelfSlots', () => {
+  it('flattens the PostgREST count aggregate', () => {
+    expect(
+      toShelfSlots([
+        {
+          id: 'a',
+          name: 'A',
+          slug: 'a',
+          accent_color: null,
+          is_public: true,
+          shelf_items: [{ count: 7 }],
+        },
+        { id: 'b', name: 'B', slug: 'b', accent_color: null, is_public: true, shelf_items: [] },
+      ]),
+    ).toEqual([
+      { id: 'a', filmCount: 7 },
+      { id: 'b', filmCount: 0 },
+    ]);
+  });
+});
+
+describe('listShelvedFilmIds', () => {
+  it('returns nothing without asking when the user has no shelves', async () => {
+    const sb = fakeSupabase({ shelf_items: { data: null, error: null } });
+    expect(await listShelvedFilmIds(sb.client, [])).toEqual([]);
+    expect(sb.opsFor('shelf_items')).toEqual([]);
+  });
+
+  it('flattens the rows to plain ids, scoped to the given shelves', async () => {
+    const sb = fakeSupabase({
+      shelf_items: { data: [{ film_id: 603 }, { film_id: 604 }], error: null },
+    });
+    expect(await listShelvedFilmIds(sb.client, [SHELF])).toEqual([603, 604]);
+    expect(sb.opsFor('shelf_items')).toEqual(expect.arrayContaining([['in', 'shelf_id', [SHELF]]]));
   });
 });

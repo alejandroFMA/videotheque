@@ -1,22 +1,55 @@
 ---
-import { WORDMARK } from '../constants';
+import { HEADER_HOME_LABEL, HOME_PATH, WORDMARK } from '../constants';
+
+interface Props {
+  variant?: 'page' | 'bar';
+}
+
+const { variant = 'page' } = Astro.props;
 ---
 
-<h1 class="wordmark">{WORDMARK}</h1>
+<h1 class:list={['wordmark', variant]}>
+  {
+    variant === 'bar' ? (
+      <a href={HOME_PATH} aria-label={HEADER_HOME_LABEL}>
+        {WORDMARK}
+      </a>
+    ) : (
+      WORDMARK
+    )
+  }
+</h1>
 
 <style>
-  /* Big Shoulders is already condensed, so it gets size rather than tracking —
-     wide letterspacing throws away the narrowness it was picked for. */
   .wordmark {
     margin: 0;
     font-family: var(--font-display);
     font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  /* Big Shoulders is already condensed, so at page size it gets size rather
+     than tracking — wide letterspacing throws away the narrowness it was
+     picked for. */
+  .page {
     font-size: clamp(52px, 13vw, 140px);
     /* The grave on the È rides above cap height and overflows a tighter line
        box, so it needs the extra leading rather than 1 or below. */
     line-height: 1.1;
     letter-spacing: 0.02em;
-    text-transform: uppercase;
     text-align: center;
+  }
+
+  /* At bar size the argument reverses: 23px of condensed caps needs the
+     tracking the addendum specifies to read as a masthead and not as a label. */
+  .bar {
+    font-size: 23px;
+    line-height: 1;
+    letter-spacing: 0.16em;
+  }
+
+  .bar a {
+    color: inherit;
+    text-decoration: none;
   }
 </style>

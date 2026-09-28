@@ -1,0 +1,358 @@
+---
+// Only what the markup uses. The `<script>` block is a separate module and
+// imports its own strings; repeating them here trips no-unused-vars.
+import { SEARCH_LABEL, SEARCH_PLACEHOLDER, SEARCH_RESULTS_LABEL } from '../constants';
+import type { ShelfSlot } from '../lib/shelf-target';
+
+interface Props {
+  shelvedIds: number[];
+  shelves: ShelfSlot[];
+}
+
+const { shelvedIds, shelves } = Astro.props;
+---
+
+<div class="search">
+  <label class="sr-only" for="film-search">{SEARCH_LABEL}</label>
+  <input
+    id="film-search"
+    type="search"
+    autocomplete="off"
+    placeholder={SEARCH_PLACEHOLDER}
+    role="combobox"
+    aria-expanded="false"
+    aria-controls="film-results"
+    aria-autocomplete="list"
+  />
+
+  <ul id="film-results" role="listbox" aria-label={SEARCH_RESULTS_LABEL} hidden></ul>
+
+  {
+    /* Announces "adding…" and the failure messages to screen readers; sighted
+      users get the same information from the dropdown's own notice/badge. */
+  }
+  <p id="search-status" class="sr-only" role="status" aria-live="polite"></p>
+
+  <script id="shelved-ids" type="application/json" set:html={JSON.stringify(shelvedIds)} />
+  <script id="shelf-slots" type="application/json" set:html={JSON.stringify(shelves)} />
+</div>
+
+<style>
+  .search {
+    position: relative;
+  }
+
+  /* The only surface in the whole header, so it carries the whole job of
+     separating chrome from wall. A full radius does that in light theme, where
+     tone alone barely registers. */
+  input {
+    width: 280px;
+    max-width: 100%;
+    padding: 9px 16px;
+    background: var(--field);
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    font-size: 13px;
+  }
+
+  input::placeholder {
+    color: var(--muted);
+  }
+
+  input:focus {
+    border-color: var(--ink);
+    outline: none;
+  }
+
+  input::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  #film-results {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 20;
+    width: 340px;
+    max-width: 92vw;
+    max-height: 60vh;
+    overflow-y: auto;
+    margin: 0;
+    padding: 5px;
+    list-style: none;
+    background: var(--field);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  }
+
+  #film-results :global(li) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 9px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  #film-results :global(li[aria-selected='true']),
+  #film-results :global(li:hover) {
+    background: var(--track);
+  }
+
+  #film-results :global(img),
+  #film-results :global(.no-poster) {
+    width: 34px;
+    height: 51px;
+    flex: none;
+    border-radius: 2px;
+    object-fit: cover;
+    background: var(--track);
+  }
+
+  #film-results :global(.title) {
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  #film-results :global(.meta) {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  #film-results :global(.state) {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--brass);
+    white-space: nowrap;
+  }
+
+  #film-results :global(.notice) {
+    padding: 12px 10px;
+    font-size: 12.5px;
+    color: var(--muted);
+    cursor: default;
+  }
+
+  @media (max-width: 640px) {
+    input {
+      width: 100%;
+    }
+
+    #film-results {
+      width: 100%;
+    }
+  }
+</style>
+
+<script>
+  import { posterUrl, searchFilms, type TmdbSearchResult } from '../lib/tmdb';
+  import { spineFromPoster } from '../lib/colors';
+  import { addFilmToFirstShelfWithRoom, type ShelfSlot } from '../lib/shelf-target';
+  import {
+    ADD_FAILED,
+    SEARCH_ADDING,
+    SEARCH_EMPTY,
+    SEARCH_FAILED,
+    SEARCH_ON_SHELF,
+    SHELF_FULL_MESSAGE,
+  } from '../constants';
+
+  const DEBOUNCE_MS = 250;
+  const MIN_QUERY_LENGTH = 2;
+  const THUMBNAIL_SIZE = 'w92';
+  const YEAR_LENGTH = 4;
+  const OPTION_ID_PREFIX = 'film-result-';
+
+  const container = document.querySelector<HTMLElement>('.search');
+  const input = document.querySelector<HTMLInputElement>('#film-search');
+  const list = document.querySelector<HTMLUListElement>('#film-results');
+  const shelvedScript = document.querySelector<HTMLScriptElement>('#shelved-ids');
+  const status = document.querySelector<HTMLElement>('#search-status');
+  const slotsScript = document.querySelector<HTMLScriptElement>('#shelf-slots');
+
+  if (container && input && list && shelvedScript && status && slotsScript) {
+    const shelved = new Set<number>(JSON.parse(shelvedScript.textContent ?? '[]'));
+    const slots: ShelfSlot[] = JSON.parse(slotsScript.textContent ?? '[]');
+    let results: TmdbSearchResult[] = [];
+    let active = -1;
+    let timer: number | undefined;
+    // Responses can land out of order; only the newest query may paint.
+    let latest = 0;
+
+    const setOpen = (open: boolean) => {
+      list.hidden = !open;
+      input.setAttribute('aria-expanded', String(open));
+    };
+
+    const close = () => {
+      setOpen(false);
+      active = -1;
+      input.removeAttribute('aria-activedescendant');
+    };
+
+    const notice = (text: string) => {
+      list.replaceChildren(
+        Object.assign(document.createElement('li'), {
+          className: 'notice',
+          textContent: text,
+        }),
+      );
+      setOpen(true);
+      input.removeAttribute('aria-activedescendant');
+    };
+
+    const paint = () => {
+      list.replaceChildren(
+        ...results.map((film, index) => {
+          const item = document.createElement('li');
+          item.id = `${OPTION_ID_PREFIX}${index}`;
+          item.role = 'option';
+          item.dataset.index = String(index);
+          item.setAttribute('aria-selected', String(index === active));
+
+          const url = posterUrl(film.poster_path, THUMBNAIL_SIZE);
+          if (url) {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = '';
+            img.loading = 'lazy';
+            item.append(img);
+          } else {
+            item.append(
+              Object.assign(document.createElement('span'), {
+                className: 'no-poster',
+              }),
+            );
+          }
+
+          const text = document.createElement('div');
+          text.append(
+            Object.assign(document.createElement('div'), {
+              className: 'title',
+              textContent: film.title,
+            }),
+          );
+          text.append(
+            Object.assign(document.createElement('div'), {
+              className: 'meta',
+              textContent: (film.release_date ?? '').slice(0, YEAR_LENGTH),
+            }),
+          );
+          item.append(text);
+
+          if (shelved.has(film.id)) {
+            item.append(
+              Object.assign(document.createElement('span'), {
+                className: 'state',
+                textContent: SEARCH_ON_SHELF,
+              }),
+            );
+          }
+
+          return item;
+        }),
+      );
+      setOpen(true);
+      // A dangling reference confuses some screen readers, so the attribute
+      // is removed rather than set to an empty string when nothing is active.
+      if (active >= 0) {
+        input.setAttribute('aria-activedescendant', `${OPTION_ID_PREFIX}${active}`);
+      } else {
+        input.removeAttribute('aria-activedescendant');
+      }
+    };
+
+    const run = async (query: string) => {
+      const ticket = (latest += 1);
+      try {
+        const response = await searchFilms(query);
+        if (ticket !== latest) return;
+        results = response.results;
+        active = -1;
+        if (results.length === 0) return notice(SEARCH_EMPTY);
+        paint();
+      } catch {
+        if (ticket === latest) notice(SEARCH_FAILED);
+      }
+    };
+
+    const pick = async (index: number) => {
+      const film = results[index];
+      if (!film || shelved.has(film.id)) return;
+
+      status.textContent = SEARCH_ADDING;
+      // The colour has to exist before the request: the endpoint validates it,
+      // and it is the one value the browser is trusted with.
+      const spine = await spineFromPoster(film.poster_path ?? null, film.id);
+      const outcome = await addFilmToFirstShelfWithRoom(slots, { tmdbId: film.id, ...spine });
+
+      if (!outcome.ok) {
+        const message = outcome.reason === 'all_full' ? SHELF_FULL_MESSAGE : ADD_FAILED;
+        status.textContent = message;
+        notice(message);
+        return;
+      }
+
+      shelved.add(film.id);
+      const slot = slots.find((candidate) => candidate.id === outcome.shelfId);
+      if (slot) slot.filmCount += 1;
+      status.textContent = '';
+      paint();
+    };
+
+    input.addEventListener('input', () => {
+      window.clearTimeout(timer);
+      const query = input.value.trim();
+      if (query.length < MIN_QUERY_LENGTH) {
+        // Invalidates a response already in flight; otherwise it lands after
+        // this point and reopens the dropdown over a field the user cleared.
+        latest += 1;
+        results = [];
+        close();
+        return;
+      }
+      timer = window.setTimeout(() => run(query), DEBOUNCE_MS);
+    });
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') return close();
+      if (list.hidden || results.length === 0) return;
+
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        active = (active + step + results.length) % results.length;
+        paint();
+        list.children[active]?.scrollIntoView({ block: 'nearest' });
+      }
+
+      if (event.key === 'Enter' && active >= 0) {
+        event.preventDefault();
+        pick(active);
+      }
+    });
+
+    list.addEventListener('click', (event) => {
+      const item = (event.target as HTMLElement).closest<HTMLLIElement>('li[data-index]');
+      if (item) pick(Number(item.dataset.index));
+    });
+
+    document.addEventListener('pointerdown', (event) => {
+      const target = event.target as Node;
+      if (!list.hidden && !list.contains(target) && !input.contains(target)) close();
+    });
+
+    // relatedTarget is the element receiving focus; null means focus left the
+    // document (another window), which must not close the dropdown. Checking
+    // against the whole container, not just the input, keeps a click into the
+    // results list (which moves focus there first) from closing it before the
+    // click handler runs.
+    container.addEventListener('focusout', (event) => {
+      const relatedTarget = event.relatedTarget as Node | null;
+      if (!list.hidden && relatedTarget !== null && !container.contains(relatedTarget)) {
+        close();
+      }
+    });
+  }
+</script>

@@ -10,6 +10,10 @@ interface Props {
 }
 
 const { title } = Astro.props;
+
+// The layout's own toggle is `position: fixed` at the top right, so a header
+// would land on top of it. A page that brings chrome brings its own toggle.
+const hasHeader = Astro.slots.has('header');
 ---
 
 <!doctype html>
@@ -44,8 +48,25 @@ const { title } = Astro.props;
     </script>
   </head>
   <body>
-    <ThemeToggle />
+    {
+      hasHeader ? (
+        <slot name="header" />
+      ) : (
+        <div class="toggle-corner">
+          <ThemeToggle />
+        </div>
+      )
+    }
     <main><slot /></main>
     <Attribution />
   </body>
 </html>
+
+<style>
+  .toggle-corner {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 10;
+  }
+</style>

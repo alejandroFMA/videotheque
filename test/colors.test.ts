@@ -1,0 +1,72 @@
+import { describe, expect, it } from 'vitest';
+import { fallbackSpine, spineFromPixels } from '../src/lib/colors';
+// The endpoint's own validator, not a copy: a copy would go on passing after
+// the endpoint tightened its rule, which is the drift this guards against.
+import { SPINE_COLOR_PATTERN as PATTERN } from '../src/lib/shelf-actions';
+
+/** One flat colour repeated, as RGBA bytes — the shape a canvas hands back. */
+function solid(r: number, g: number, b: number, pixels = 4): Uint8ClampedArray {
+  const data = new Uint8ClampedArray(pixels * 4);
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = r;
+    data[i + 1] = g;
+    data[i + 2] = b;
+    data[i + 3] = 255;
+  }
+  return data;
+}
+
+describe('spineFromPixels', () => {
+  it('returns a string the add-film endpoint will accept', () => {
+    expect(spineFromPixels(solid(200, 30, 30)).spineColor).toMatch(PATTERN);
+  });
+
+  it('keeps the hue of a saturated poster', () => {
+    const [, hue] = PATTERN.exec(spineFromPixels(solid(200, 30, 30)).spineColor)!;
+    expect(Number(hue)).toBeLessThan(20);
+  });
+
+  it('clamps saturation and lightness into the printable band', () => {
+    for (const sample of [solid(0, 0, 0), solid(255, 255, 255), solid(255, 0, 255)]) {
+      const [, , saturation, lightness] = PATTERN.exec(spineFromPixels(sample).spineColor)!;
+      expect(Number(saturation)).toBeGreaterThanOrEqual(30);
+      expect(Number(saturation)).toBeLessThanOrEqual(68);
+      expect(Number(lightness)).toBeGreaterThanOrEqual(30);
+      expect(Number(lightness)).toBeLessThanOrEqual(58);
+    }
+  });
+
+  it('marks a spine dark below 45% lightness and light above it', () => {
+    expect(spineFromPixels(solid(0, 0, 0)).spineDark).toBe(true);
+    expect(spineFromPixels(solid(255, 255, 255)).spineDark).toBe(false);
+  });
+
+  it('refuses an empty buffer rather than dividing by zero', () => {
+    expect(() => spineFromPixels(new Uint8ClampedArray(0))).toThrow(RangeError);
+  });
+});
+
+describe('fallbackSpine', () => {
+  it('is stable for one id and valid for every id', () => {
+    expect(fallbackSpine(603)).toEqual(fallbackSpine(603));
+    for (let id = 0; id < 10; id += 1) {
+      expect(fallbackSpine(id).spineColor).toMatch(PATTERN);
+    }
+  });
+
+  it('falls back to white when the id is not a safe integer, since FALLBACK_HUES has no fractional index', () => {
+    const result = fallbackSpine(603.5);
+    expect(result).toEqual({ spineColor: 'hsl(0 0% 100%)', spineDark: false });
+    expect(result.spineColor).toMatch(PATTERN);
+  });
+
+  it('keeps a normal palette colour for a negative integer id, rather than white', () => {
+    const result = fallbackSpine(-7);
+    expect(result.spineColor).toMatch(PATTERN);
+    expect(result.spineColor).not.toBe('hsl(0 0% 100%)');
+  });
+
+  it('the white indeterminate-colour marker itself satisfies the add-film validator', () => {
+    expect(fallbackSpine(Number.NaN).spineColor).toMatch(PATTERN);
+  });
+});

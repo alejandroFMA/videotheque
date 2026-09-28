@@ -61,6 +61,9 @@ export function toFilmRow(movie: TmdbMovie): FilmRow {
   };
 }
 
+/** `w154` is reserved for the spine-colour canvas read in `colors.ts`. Rendering
+ *  a poster at that size elsewhere would cache a CORS-less response for the URL
+ *  the extraction needs, and every spine would silently fall back. */
 export function posterUrl(path: string | null | undefined, size = 'w500'): string | null {
   return path ? `${IMAGE_BASE}${size}${path}` : null;
 }

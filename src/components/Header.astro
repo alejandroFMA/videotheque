@@ -1,0 +1,86 @@
+---
+import AvatarMenu from './AvatarMenu.astro';
+import SearchBar from './SearchBar.astro';
+import ThemeToggle from './ThemeToggle.astro';
+import Wordmark from './Wordmark.astro';
+import type { ShelfSlot } from '../lib/shelf-target';
+
+interface Props {
+  displayName: string;
+  shelvedIds: number[];
+  shelves: ShelfSlot[];
+}
+
+const { displayName, shelvedIds, shelves } = Astro.props;
+---
+
+<header>
+  <Wordmark variant="bar" />
+
+  {
+    /* No shelves means the page failed to load them, since sign-up seeds one.
+       Offering search then would let the user pick a film only to be told the
+       shelf is full — the empty list and "all full" are indistinguishable once
+       the add flow has them. */
+  }
+  {
+    shelves.length > 0 && (
+      <div class="search-slot">
+        <SearchBar shelvedIds={shelvedIds} shelves={shelves} />
+      </div>
+    )
+  }
+
+  <div class="cluster">
+    <ThemeToggle />
+    <AvatarMenu displayName={displayName} />
+  </div>
+</header>
+
+<style>
+  /* No band and no rule: the wall runs unbroken from the top of the page to
+     the bottom, the way Attribution already treats the foot. */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px var(--gutter);
+  }
+
+  /* search-slot is header's direct child, a sibling of .cluster rather than
+     its parent, so the field can take its own row below 640px without
+     forcing the toggle and avatar down with it (see the media query). The
+     auto margin pushes it, and everything after it, to the right. */
+  .search-slot {
+    margin-left: auto;
+  }
+
+  .cluster {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Two rows below this width: wordmark and the toggle+avatar cluster share
+     row one, with the cluster still hard right on its own auto margin; the
+     search field — ordered after both and given a 100% basis — no longer
+     fits on that row and drops to row two, full width. The name goes too:
+     the avatar already identifies the account, and the name is what the
+     field needs the room from. */
+  @media (max-width: 640px) {
+    header {
+      flex-wrap: wrap;
+      row-gap: 10px;
+    }
+
+    .search-slot {
+      order: 1;
+      flex-basis: 100%;
+      margin-left: 0;
+    }
+
+    .cluster {
+      margin-left: auto;
+    }
+  }
+</style>

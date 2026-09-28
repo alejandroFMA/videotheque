@@ -123,9 +123,10 @@ export async function handleReorderShelf(ctx: ReorderContext): Promise<Response>
 const CREATED = 201;
 const OK = 200;
 
-// Space-separated hsl() with integer components — what the browser computes
-// from the poster.
-const SPINE_COLOR_PATTERN = /^hsl\((\d{1,3}) (\d{1,3})% (\d{1,3})%\)$/;
+/** Space-separated `hsl()` with integer components — what the browser computes
+ *  from the poster. Exported so `colors.ts`'s tests assert against the real
+ *  validator: a copy of it would keep passing after this one changed. */
+export const SPINE_COLOR_PATTERN = /^hsl\((\d{1,3}) (\d{1,3})% (\d{1,3})%\)$/;
 const MAX_HUE = 360;
 const MAX_PERCENT = 100;
 
