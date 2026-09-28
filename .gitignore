@@ -11,3 +11,6 @@ dist/
 .vercel/
 .astro/
 .playwright-mcp/
+
+# Crash dumps from Git Bash (msys2) land in the working directory.
+*.stackdump
