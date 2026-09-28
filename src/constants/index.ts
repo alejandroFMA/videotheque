@@ -72,7 +72,9 @@ export const SUPABASE_OTP_DISABLED = 'otp_disabled';
 
 export const HOME_PAGE_TITLE = 'Tu estantería · Videothèque';
 
-export const HEADER_HOME_LABEL = 'Ir a tu estantería';
+// Opens with the visible word: an accessible name that does not contain the
+// visible text leaves voice control unable to address the link (WCAG 2.5.3).
+export const HEADER_HOME_LABEL = `${WORDMARK} · ir a tu estantería`;
 
 // The search placeholder is the one string the shelf spec names verbatim.
 export const SEARCH_PLACEHOLDER = 'Busca una película para archivarla';

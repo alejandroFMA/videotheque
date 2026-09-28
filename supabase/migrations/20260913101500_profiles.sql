@@ -19,7 +19,7 @@ alter table public.profiles enable row level security;
 -- No insert policy: the sign-up trigger is the only writer. No delete
 -- policy either: the cascade from auth.users is the only remover.
 create policy "read your own profile"
-  on public.profiles for select
+  on public.profiles for select to authenticated
   using (id = (select auth.uid()));
 
 create policy "edit your own profile"

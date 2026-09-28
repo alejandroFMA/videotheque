@@ -17,7 +17,19 @@ const { displayName, shelvedIds, shelves } = Astro.props;
 <header>
   <Wordmark variant="bar" />
 
-  <div class="search-slot"><SearchBar shelvedIds={shelvedIds} shelves={shelves} /></div>
+  {
+    /* No shelves means the page failed to load them, since sign-up seeds one.
+       Offering search then would let the user pick a film only to be told the
+       shelf is full — the empty list and "all full" are indistinguishable once
+       the add flow has them. */
+  }
+  {
+    shelves.length > 0 && (
+      <div class="search-slot">
+        <SearchBar shelvedIds={shelvedIds} shelves={shelves} />
+      </div>
+    )
+  }
 
   <div class="cluster">
     <ThemeToggle />
