@@ -3,7 +3,12 @@ import Layout from '../layouts/Layout.astro';
 import Header from '../components/Header.astro';
 import { HOME_PAGE_TITLE, LOGIN_PATH, SHELVES_LOAD_FAILED } from '../constants';
 import { getOwnProfile } from '../lib/profiles';
-import { listOwnShelves, listShelvedFilmIds, type ShelfSummary } from '../lib/shelves';
+import {
+  listOwnShelves,
+  listShelvedFilmIds,
+  toShelfSlots,
+  type ShelfSummary,
+} from '../lib/shelves';
 
 export const prerender = false;
 
@@ -37,7 +42,12 @@ try {
 ---
 
 <Layout title={HOME_PAGE_TITLE}>
-  <Header slot="header" displayName={displayName} shelvedIds={shelvedIds} />
+  <Header
+    slot="header"
+    displayName={displayName}
+    shelvedIds={shelvedIds}
+    shelves={toShelfSlots(shelves)}
+  />
 
   {loadError && <p role="alert">{loadError}</p>}
 

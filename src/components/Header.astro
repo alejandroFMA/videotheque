@@ -3,19 +3,21 @@ import AvatarMenu from './AvatarMenu.astro';
 import SearchBar from './SearchBar.astro';
 import ThemeToggle from './ThemeToggle.astro';
 import Wordmark from './Wordmark.astro';
+import type { ShelfSlot } from '../lib/shelf-target';
 
 interface Props {
   displayName: string;
   shelvedIds: number[];
+  shelves: ShelfSlot[];
 }
 
-const { displayName, shelvedIds } = Astro.props;
+const { displayName, shelvedIds, shelves } = Astro.props;
 ---
 
 <header>
   <Wordmark variant="bar" />
 
-  <div class="search-slot"><SearchBar shelvedIds={shelvedIds} /></div>
+  <div class="search-slot"><SearchBar shelvedIds={shelvedIds} shelves={shelves} /></div>
 
   <div class="cluster">
     <ThemeToggle />

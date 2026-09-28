@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FilmRow } from './tmdb-mapping';
+import type { ShelfSlot } from './shelf-target';
 
 type Db = Pick<SupabaseClient, 'from' | 'rpc'>;
 
@@ -24,9 +25,19 @@ export interface ShelfSummary {
   slug: string;
   accent_color: string | null;
   is_public: boolean;
+  /** PostgREST returns an aggregate as a one-element array. */
+  shelf_items: { count: number }[];
 }
 
-const SHELF_SUMMARY_COLUMNS = 'id, name, slug, accent_color, is_public';
+const SHELF_SUMMARY_COLUMNS = 'id, name, slug, accent_color, is_public, shelf_items(count)';
+
+/** The shape the browser's add flow needs: id and how full it is. */
+export function toShelfSlots(shelves: ShelfSummary[]): ShelfSlot[] {
+  return shelves.map((shelf) => ({
+    id: shelf.id,
+    filmCount: shelf.shelf_items[0]?.count ?? 0,
+  }));
+}
 
 function fail(operation: string, error: { message: string }): never {
   throw new Error(`[shelves] ${operation} failed: ${error.message}`);
