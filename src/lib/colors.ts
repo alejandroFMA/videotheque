@@ -8,7 +8,14 @@ import { posterUrl } from './tmdb-mapping';
 
 const SAMPLE_WIDTH = 18;
 const SAMPLE_HEIGHT = 27;
-const POSTER_SIZE = 'w92';
+// Deliberately NOT the w92 the search dropdown renders its thumbnails at.
+// image.tmdb.org only sends Access-Control-Allow-Origin when the request
+// carries an Origin header, so a plain <img> caches a CORS-less response; a
+// later crossOrigin request for that same URL is refused against the cache
+// entry and every spine silently falls back. A separate size keeps the two
+// uses in separate cache entries, so reading pixels can never break the
+// visible thumbnail — and the thumbnail can never break the colour.
+const POSTER_SIZE = 'w154';
 
 // Saturated pixels carry the poster's identity. Near-black and near-white ones
 // are shadow and paper, so they are discounted rather than dropped: a poster
