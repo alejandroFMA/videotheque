@@ -1,0 +1,67 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Bookcase from '../../components/Bookcase.astro';
+import PublicHeader from '../../components/PublicHeader.astro';
+import {
+  PROFILE_NAME_TOKEN,
+  PUBLIC_EMPTY,
+  PUBLIC_NOT_FOUND,
+  PUBLIC_NOT_FOUND_TITLE,
+  PUBLIC_SHELF_OF,
+  SHELVES_LOAD_FAILED,
+  WORDMARK,
+} from '../../constants';
+import { getProfileByHandle, type Profile } from '../../lib/profiles';
+import { listShelvesWithFilms, type ShelfWithFilms } from '../../lib/shelves';
+
+export const prerender = false;
+
+const NOT_FOUND = 404;
+const SERVER_ERROR = 500;
+
+const { supabase } = Astro.locals;
+
+let profile: Profile | null = null;
+let shelves: ShelfWithFilms[] = [];
+let loadError: string | null = null;
+try {
+  profile = await getProfileByHandle(supabase, Astro.params.handle ?? '');
+  if (profile) shelves = await listShelvesWithFilms(supabase, profile.id, { publicOnly: true });
+} catch (err) {
+  loadError = SHELVES_LOAD_FAILED;
+  console.error('[u] profile query failed', err);
+}
+
+if (loadError) Astro.response.status = SERVER_ERROR;
+else if (!profile) Astro.response.status = NOT_FOUND;
+
+const heading = profile ? PUBLIC_SHELF_OF.replace(PROFILE_NAME_TOKEN, profile.display_name) : null;
+const title = heading ? `${heading} · ${WORDMARK}` : PUBLIC_NOT_FOUND_TITLE;
+---
+
+<Layout title={title}>
+  <PublicHeader slot="header" heading={heading} />
+
+  {
+    loadError && (
+      <p class="notice" role="alert">
+        {loadError}
+      </p>
+    )
+  }
+  {!loadError && !profile && <p class="notice">{PUBLIC_NOT_FOUND}</p>}
+  {
+    !loadError && profile && (
+      <Bookcase shelves={shelves} editable={false} emptyHint={PUBLIC_EMPTY} />
+    )
+  }
+</Layout>
+
+<style>
+  .notice {
+    margin: 80px auto;
+    text-align: center;
+    font-size: 15px;
+    color: var(--muted);
+  }
+</style>

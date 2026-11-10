@@ -1,0 +1,240 @@
+---
+import {
+  LABEL_CANCEL,
+  LABEL_COLOR,
+  LABEL_DIALOG_TITLE,
+  LABEL_MAX_LENGTH,
+  LABEL_NAME,
+  LABEL_REMOVE,
+  LABEL_SAVE,
+  LABEL_TEXT_COLOR,
+  POSTIT_DEFAULT_COLOR,
+  POSTIT_DEFAULT_TEXT_COLOR,
+} from '../constants';
+---
+
+<dialog id="label-editor" aria-labelledby="label-editor-title">
+  <form id="label-form" method="dialog">
+    <h2 id="label-editor-title">{LABEL_DIALOG_TITLE}</h2>
+
+    <label class="field">
+      <span>{LABEL_NAME}</span>
+      <input id="label-name" type="text" maxlength={LABEL_MAX_LENGTH} autocomplete="off" required />
+    </label>
+
+    <div class="colours">
+      <label class="field">
+        <span>{LABEL_COLOR}</span>
+        <input id="label-color" type="color" value={POSTIT_DEFAULT_COLOR} />
+      </label>
+      <label class="field">
+        <span>{LABEL_TEXT_COLOR}</span>
+        <input id="label-ink" type="color" value={POSTIT_DEFAULT_TEXT_COLOR} />
+      </label>
+    </div>
+
+    <p id="label-error" class="error" role="alert"></p>
+
+    <div class="actions">
+      <button type="button" id="label-remove" class="quiet">{LABEL_REMOVE}</button>
+      <button type="button" id="label-cancel" class="quiet">{LABEL_CANCEL}</button>
+      <button type="submit" class="primary">{LABEL_SAVE}</button>
+    </div>
+  </form>
+</dialog>
+
+<style>
+  dialog {
+    width: min(360px, calc(100vw - 32px));
+    padding: 22px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--field);
+    color: var(--ink);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
+  }
+
+  dialog::backdrop {
+    background: rgba(8, 8, 8, 0.55);
+  }
+
+  h2 {
+    margin: 0 0 16px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .field span {
+    display: block;
+    margin-bottom: 6px;
+    padding: 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  #label-name {
+    width: 100%;
+    padding: 9px 11px;
+    background: none;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    font-size: 14px;
+  }
+
+  #label-name:focus {
+    border-color: var(--ink);
+    outline: none;
+  }
+
+  .colours {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  /* The swatch is the control: the native well, with the browser's own frame
+     and padding taken off so it reads as a card of the colour. */
+  input[type='color'] {
+    display: block;
+    width: 100%;
+    height: 38px;
+    padding: 0;
+    background: none;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  input[type='color']::-webkit-color-swatch-wrapper {
+    padding: 3px;
+  }
+
+  input[type='color']::-webkit-color-swatch {
+    border: 0;
+    border-radius: 3px;
+  }
+
+  input[type='color']::-moz-color-swatch {
+    border: 0;
+    border-radius: 3px;
+  }
+
+  .error {
+    margin: 14px 0 0;
+    font-size: 12.5px;
+    color: #c2473a;
+  }
+
+  .error:empty {
+    display: none;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 22px;
+  }
+
+  .actions button {
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .quiet {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--muted);
+  }
+
+  .quiet:hover {
+    color: var(--ink);
+  }
+
+  #label-remove {
+    margin-right: auto;
+    padding-left: 0;
+  }
+
+  #label-remove[hidden] {
+    display: none;
+  }
+
+  .primary {
+    background: var(--ink);
+    border: 1px solid var(--ink);
+    color: var(--wall);
+  }
+
+  .actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+</style>
+
+<script>
+  import { saveShelfLabel } from '../lib/shelf-api';
+  import { LABEL_SAVE_FAILED, POSTIT_DEFAULT_COLOR, POSTIT_DEFAULT_TEXT_COLOR } from '../constants';
+
+  const dialog = document.querySelector<HTMLDialogElement>('#label-editor');
+  const form = document.querySelector<HTMLFormElement>('#label-form');
+  const nameInput = document.querySelector<HTMLInputElement>('#label-name');
+  const colourInput = document.querySelector<HTMLInputElement>('#label-color');
+  const inkInput = document.querySelector<HTMLInputElement>('#label-ink');
+  const removeButton = document.querySelector<HTMLButtonElement>('#label-remove');
+  const cancelButton = document.querySelector<HTMLButtonElement>('#label-cancel');
+  const error = document.querySelector<HTMLElement>('#label-error');
+
+  if (
+    dialog &&
+    form &&
+    nameInput &&
+    colourInput &&
+    inkInput &&
+    removeButton &&
+    cancelButton &&
+    error
+  ) {
+    let shelfId: string | null = null;
+    const buttons = [...form.querySelectorAll('button')];
+
+    document.addEventListener('click', (event) => {
+      const trigger = (event.target as HTMLElement).closest<HTMLElement>('[data-edit-label]');
+      const shelf = trigger?.closest<HTMLElement>('[data-shelf-id]');
+      if (!shelf) return;
+
+      shelfId = shelf.dataset.shelfId ?? null;
+      nameInput.value = shelf.dataset.labelName ?? '';
+      const current = shelf.dataset.labelColor;
+      colourInput.value = current ?? POSTIT_DEFAULT_COLOR;
+      inkInput.value = shelf.dataset.labelInk ?? POSTIT_DEFAULT_TEXT_COLOR;
+      removeButton.hidden = !current;
+      error.textContent = '';
+      dialog.showModal();
+      nameInput.focus();
+    });
+
+    // The label is drawn by the server, so a saved change reloads rather than
+    // rebuilding the postit markup a second time in the browser.
+    const save = async (label: Parameters<typeof saveShelfLabel>[1]) => {
+      if (!shelfId) return;
+      buttons.forEach((button) => (button.disabled = true));
+      if (await saveShelfLabel(shelfId, label)) return location.reload();
+      buttons.forEach((button) => (button.disabled = false));
+      error.textContent = LABEL_SAVE_FAILED;
+    };
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const name = nameInput.value.trim();
+      if (!name) return;
+      save({ name, accentColor: colourInput.value, textColor: inkInput.value });
+    });
+
+    removeButton.addEventListener('click', () => save({ accentColor: null }));
+    cancelButton.addEventListener('click', () => dialog.close());
+  }
+</script>

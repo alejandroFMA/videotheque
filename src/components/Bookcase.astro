@@ -1,0 +1,387 @@
+---
+import FilmCase from './FilmCase.astro';
+import LabelEditor from './LabelEditor.astro';
+import Shelf from './Shelf.astro';
+import Spine from './Spine.astro';
+import { ADD_SHELF, SHELF_CAPACITY } from '../constants';
+import type { ShelfWithFilms } from '../lib/shelves';
+
+interface Props {
+  shelves: ShelfWithFilms[];
+  /** The owner's view: drag to reorder, remove, label, add a shelf. */
+  editable: boolean;
+  emptyHint: string;
+}
+
+const { shelves, editable, emptyHint } = Astro.props;
+
+const filmCount = shelves.reduce((total, shelf) => total + shelf.shelf_items.length, 0);
+const allFull =
+  shelves.length > 0 && shelves.every((shelf) => shelf.shelf_items.length >= SHELF_CAPACITY);
+---
+
+<section id="bookcase" class="bookcase" data-editable={editable ? '' : undefined}>
+  {shelves.map((shelf) => <Shelf shelf={shelf} editable={editable} />)}
+
+  <p id="empty-hint" class="hint" hidden={filmCount > 0}>{emptyHint}</p>
+
+  {
+    editable && (
+      <button type="button" id="add-shelf" hidden={!allFull}>
+        {ADD_SHELF}
+      </button>
+    )
+  }
+</section>
+
+<FilmCase editable={editable} />
+
+{editable && <LabelEditor />}
+
+{
+  /* The blank a film added from search is drawn from, so the spine markup
+     exists once, in Spine.astro, and not a second time in the script. */
+}
+{
+  editable && (
+    <template id="spine-template">
+      <Spine film={null} />
+    </template>
+  )
+}
+
+<p id="shelf-toast" role="status" aria-live="polite"></p>
+
+<style>
+  .bookcase {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0 72px;
+  }
+
+  .hint {
+    margin: 30px 0 0;
+    max-width: 30ch;
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  #add-shelf {
+    margin-top: 46px;
+    padding: 10px 20px;
+    background: none;
+    border: 1px dashed var(--muted);
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  #add-shelf:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  .hint[hidden],
+  #add-shelf[hidden] {
+    display: none;
+  }
+
+  #shelf-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    z-index: 30;
+    max-width: calc(100vw - 32px);
+    margin: 0;
+    padding: 10px 16px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: #141414;
+    color: #f4f1ea;
+    font-size: 13px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  #shelf-toast:empty {
+    display: none;
+  }
+</style>
+
+<script>
+  import { createShelf, removeFilmFromShelf, saveShelfOrder } from '../lib/shelf-api';
+  import { posterUrl } from '../lib/tmdb-mapping';
+  import { safeSpineColor, spineWidth } from '../lib/spine';
+  import {
+    ADD_SHELF_FAILED,
+    CASE_NO_OVERVIEW,
+    CASE_REMOVE_FAILED,
+    FILM_ADDED_EVENT,
+    FILM_REMOVED_EVENT,
+    REORDER_FAILED,
+    SHELF_CAPACITY,
+  } from '../constants';
+  import type { FilmAddedDetail, FilmRemovedDetail } from '../types';
+
+  const TOAST_MS = 4000;
+  // Below this a press is a click that opens the case, not the start of a drag.
+  const DRAG_THRESHOLD_PX = 6;
+  const COVER_SIZE = 'w500';
+  const HALF = 0.5;
+
+  const bookcase = document.querySelector<HTMLElement>('#bookcase');
+  const dialog = document.querySelector<HTMLDialogElement>('#film-case');
+  const toast = document.querySelector<HTMLElement>('#shelf-toast');
+
+  if (bookcase && dialog && toast) {
+    const editable = bookcase.dataset.editable !== undefined;
+    const emptyHint = bookcase.querySelector<HTMLElement>('#empty-hint');
+    const addShelf = bookcase.querySelector<HTMLButtonElement>('#add-shelf');
+    const template = document.querySelector<HTMLTemplateElement>('#spine-template');
+
+    const part = <T extends HTMLElement>(selector: string) => dialog.querySelector<T>(selector);
+    const box = part('.box');
+    const boxSpine = part('.box-spine');
+    const spineTitle = part('#case-spine-title');
+    const cover = part<HTMLImageElement>('#case-cover');
+    const blank = part('#case-blank');
+    const title = part('#case-title');
+    const meta = part('#case-meta');
+    const overview = part('#case-overview');
+    const caseError = part('#case-error');
+    const removeButton = part<HTMLButtonElement>('#case-remove');
+
+    let toastTimer: number | undefined;
+    const say = (text: string) => {
+      toast.textContent = text;
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => (toast.textContent = ''), TOAST_MS);
+    };
+
+    const slotsOf = (plank: Element) => [...plank.querySelectorAll<HTMLElement>('.slot')];
+    const orderOf = (plank: Element) => slotsOf(plank).map((slot) => Number(slot.dataset.filmId));
+
+    /** The two things that depend on how full the shelves are. */
+    const refresh = () => {
+      const planks = [...bookcase.querySelectorAll('.plank')];
+      if (emptyHint) emptyHint.hidden = planks.some((plank) => slotsOf(plank).length > 0);
+      if (addShelf) {
+        addShelf.hidden =
+          planks.length === 0 || planks.some((plank) => slotsOf(plank).length < SHELF_CAPACITY);
+      }
+    };
+
+    // ---- the pulled-out case ------------------------------------------------
+
+    let opened: HTMLElement | null = null;
+
+    const openCase = (slot: HTMLElement) => {
+      opened = slot;
+      const name = slot.dataset.title ?? '';
+      if (title) title.textContent = name;
+      if (spineTitle) spineTitle.textContent = name;
+      if (meta) {
+        meta.textContent = [slot.dataset.year, slot.dataset.director].filter(Boolean).join(' · ');
+      }
+      if (overview) overview.textContent = slot.dataset.overview || CASE_NO_OVERVIEW;
+      if (caseError) caseError.textContent = '';
+
+      box?.style.setProperty('--spine', slot.style.getPropertyValue('--spine'));
+      boxSpine?.classList.toggle('dark', Boolean(slot.querySelector('.spine.dark')));
+
+      const url = posterUrl(slot.dataset.poster, COVER_SIZE);
+      if (cover && blank) {
+        cover.hidden = !url;
+        blank.hidden = Boolean(url);
+        if (url) cover.src = url;
+        else cover.removeAttribute('src');
+      }
+
+      dialog.showModal();
+    };
+
+    dialog.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      if (target === dialog || target.closest('#case-close')) dialog.close();
+    });
+
+    removeButton?.addEventListener('click', async () => {
+      const slot = opened;
+      const shelfId = slot?.closest<HTMLElement>('[data-shelf-id]')?.dataset.shelfId;
+      const filmId = Number(slot?.dataset.filmId);
+      if (!slot || !shelfId) return;
+
+      removeButton.disabled = true;
+      const removed = await removeFilmFromShelf(shelfId, filmId);
+      removeButton.disabled = false;
+      if (!removed) {
+        if (caseError) caseError.textContent = CASE_REMOVE_FAILED;
+        return;
+      }
+
+      slot.remove();
+      dialog.close();
+      refresh();
+      document.dispatchEvent(
+        new CustomEvent<FilmRemovedDetail>(FILM_REMOVED_EVENT, { detail: { shelfId, filmId } }),
+      );
+    });
+
+    // ---- a film added from the search field ---------------------------------
+
+    document.addEventListener(FILM_ADDED_EVENT, (event) => {
+      const { shelfId, film } = (event as CustomEvent<FilmAddedDetail>).detail;
+      const plank = bookcase.querySelector(`[data-shelf-id="${CSS.escape(shelfId)}"] .plank`);
+      const blankSlot = template?.content.firstElementChild;
+      if (!plank || !blankSlot) return;
+
+      const slot = blankSlot.cloneNode(true) as HTMLElement;
+      slot.dataset.filmId = String(film.id);
+      slot.dataset.title = film.title;
+      if (film.year !== null) slot.dataset.year = String(film.year);
+      if (film.director) slot.dataset.director = film.director;
+      if (film.overview) slot.dataset.overview = film.overview;
+      if (film.poster_path) slot.dataset.poster = film.poster_path;
+      slot.style.setProperty('--spine', safeSpineColor(film.spine_color));
+      slot.style.setProperty('--w', `${spineWidth(film.id)}px`);
+      slot.querySelector('.spine')?.classList.toggle('dark', film.spine_dark);
+      const label = slot.querySelector('.title');
+      if (label) label.textContent = film.title;
+
+      plank.append(slot);
+      refresh();
+      slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+
+    addShelf?.addEventListener('click', async () => {
+      addShelf.disabled = true;
+      // The new shelf is drawn by the server, and the search field needs it in
+      // its list of places to put a film.
+      if (await createShelf()) return location.reload();
+      addShelf.disabled = false;
+      say(ADD_SHELF_FAILED);
+    });
+
+    // ---- reordering ---------------------------------------------------------
+
+    const restore = (plank: Element, order: number[]) => {
+      const byId = new Map(slotsOf(plank).map((slot) => [Number(slot.dataset.filmId), slot]));
+      order.forEach((id) => {
+        const slot = byId.get(id);
+        if (slot) plank.append(slot);
+      });
+    };
+
+    const persist = async (plank: Element, before: number[]) => {
+      const after = orderOf(plank);
+      if (after.join() === before.join()) return;
+      const shelfId = plank.closest<HTMLElement>('[data-shelf-id]')?.dataset.shelfId;
+      if (shelfId && (await saveShelfOrder(shelfId, after))) return;
+      restore(plank, before);
+      say(REORDER_FAILED);
+    };
+
+    interface Drag {
+      slot: HTMLElement;
+      plank: HTMLElement;
+      pointerId: number;
+      startX: number;
+      startY: number;
+      before: number[];
+      moving: boolean;
+    }
+
+    let drag: Drag | null = null;
+    // A drag ends with a click on whatever is under the pointer; that click
+    // must not open the case.
+    let swallowClick = false;
+
+    const endDrag = (commit: boolean) => {
+      if (!drag) return;
+      const { slot, plank, before, moving } = drag;
+      drag = null;
+      if (!moving) return;
+
+      slot.classList.remove('dragging');
+      swallowClick = true;
+      window.setTimeout(() => (swallowClick = false), 0);
+      if (commit) persist(plank, before);
+      else restore(plank, before);
+    };
+
+    if (editable) {
+      bookcase.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        const slot = (event.target as HTMLElement).closest<HTMLElement>('.slot');
+        const plank = slot?.closest<HTMLElement>('.plank');
+        if (!slot || !plank) return;
+        drag = {
+          slot,
+          plank,
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          before: orderOf(plank),
+          moving: false,
+        };
+      });
+
+      document.addEventListener('pointermove', (event) => {
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        if (!drag.moving) {
+          const travelled = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+          if (travelled < DRAG_THRESHOLD_PX) return;
+          drag.moving = true;
+          drag.slot.classList.add('dragging');
+        }
+
+        // The lifted spine steps through the row as the pointer crosses its
+        // neighbours. Reading the element under the pointer, rather than
+        // comparing x offsets, is what keeps this right when a narrow screen
+        // wraps one shelf into several planks.
+        const over = document
+          .elementFromPoint(event.clientX, event.clientY)
+          ?.closest<HTMLElement>('.slot');
+        if (!over || over === drag.slot || over.parentElement !== drag.plank) return;
+        const rect = over.getBoundingClientRect();
+        const pastMiddle = event.clientX > rect.left + rect.width * HALF;
+        drag.plank.insertBefore(drag.slot, pastMiddle ? over.nextSibling : over);
+      });
+
+      document.addEventListener('pointerup', (event) => {
+        if (drag && event.pointerId === drag.pointerId) endDrag(true);
+      });
+
+      // The browser took the gesture for a scroll.
+      document.addEventListener('pointercancel', (event) => {
+        if (drag && event.pointerId === drag.pointerId) endDrag(false);
+      });
+
+      // The same move without a pointer.
+      bookcase.addEventListener('keydown', (event) => {
+        if (!event.altKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+        const slot = (event.target as HTMLElement).closest<HTMLElement>('.slot');
+        const plank = slot?.closest<HTMLElement>('.plank');
+        if (!slot || !plank) return;
+
+        event.preventDefault();
+        const before = orderOf(plank);
+        const neighbour =
+          event.key === 'ArrowLeft' ? slot.previousElementSibling : slot.nextElementSibling;
+        if (!neighbour) return;
+        plank.insertBefore(slot, event.key === 'ArrowLeft' ? neighbour : neighbour.nextSibling);
+        slot.querySelector<HTMLElement>('.spine')?.focus();
+        persist(plank, before);
+      });
+    }
+
+    bookcase.addEventListener('click', (event) => {
+      if (swallowClick) return;
+      const slot = (event.target as HTMLElement).closest<HTMLElement>('.slot');
+      if (slot) openCase(slot);
+    });
+  }
+</script>

@@ -1,12 +1,14 @@
 :root {
   --font-display: 'Big Shoulders', 'Arial Narrow', sans-serif;
   --font-ui: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-spine: 'Archivo Narrow', 'Arial Narrow', sans-serif;
+  --font-postit: 'Permanent Marker', 'Marker Felt', cursive;
 
   --gutter: 24px;
   --radius: 8px;
 
   color-scheme: light;
-  --wall: #fcfcfc;
+  --wall: #faf8f3;
   --ink: #141414;
   --muted: #6e6e6e;
   --hairline: rgba(0, 0, 0, 0.13);
@@ -17,6 +19,9 @@
   --track: rgba(20, 20, 20, 0.07);
   --thumb: #ffffff;
   --brass: #b8905a;
+  /* The walnut texture is one image; these light it for the theme. */
+  --wood-dim: rgba(0, 0, 0, 0.04);
+  --wall-shadow: rgba(0, 0, 0, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,6 +35,8 @@
     --track: rgba(255, 255, 255, 0.07);
     --thumb: #4a4a48;
     --brass: #c19a63;
+    --wood-dim: rgba(0, 0, 0, 0.14);
+    --wall-shadow: rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -43,6 +50,8 @@
   --track: rgba(255, 255, 255, 0.07);
   --thumb: #4a4a48;
   --brass: #c19a63;
+  --wood-dim: rgba(0, 0, 0, 0.14);
+  --wall-shadow: rgba(0, 0, 0, 0.5);
 }
 
 *,

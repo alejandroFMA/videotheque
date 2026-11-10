@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fallbackSpine, spineFromPixels } from '../src/lib/colors';
 // The endpoint's own validator, not a copy: a copy would go on passing after
 // the endpoint tightened its rule, which is the drift this guards against.
-import { SPINE_COLOR_PATTERN as PATTERN } from '../src/lib/shelf-actions';
+import { SPINE_COLOR_PATTERN as PATTERN } from '../src/lib/spine';
 
 /** One flat colour repeated, as RGBA bytes — the shape a canvas hands back. */
 function solid(r: number, g: number, b: number, pixels = 4): Uint8ClampedArray {

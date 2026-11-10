@@ -1,0 +1,131 @@
+---
+import type { FilmRecord } from '../lib/shelves';
+import { safeSpineColor, spineWidth } from '../lib/spine';
+
+interface Props {
+  /** Null renders the blank the bookcase clones for a film added in the page. */
+  film: FilmRecord | null;
+}
+
+const { film } = Astro.props;
+---
+
+<li
+  class="slot"
+  data-film-id={film?.id}
+  data-title={film?.title}
+  data-year={film?.year}
+  data-director={film?.director}
+  data-overview={film?.overview}
+  data-poster={film?.poster_path}
+  style={film
+    ? `--spine:${safeSpineColor(film.spine_color)};--w:${spineWidth(film.id)}px`
+    : undefined}
+>
+  <button type="button" class:list={['spine', { dark: film?.spine_dark }]}>
+    <span class="title">{film?.title}</span>
+  </button>
+</li>
+
+<style>
+  .slot {
+    position: relative;
+    z-index: 1;
+    flex: 0 1 var(--w, 34px);
+    min-width: 0;
+    height: var(--spine-h);
+    /* Horizontal drags reorder; vertical ones still scroll the page. */
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: transform 160ms ease;
+  }
+
+  .spine {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 13px 0;
+    border: 0;
+    border-radius: 2px 2px 1px 1px;
+    cursor: pointer;
+    color: #171412;
+    /* A cardboard sleeve: lit along its left fold, falling off to the right,
+       with the slip-case mouth darkening the top edge. */
+    background:
+      linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.2),
+        rgba(255, 255, 255, 0) 22%,
+        rgba(0, 0, 0, 0) 72%,
+        rgba(0, 0, 0, 0.24)
+      ),
+      linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.22),
+        rgba(0, 0, 0, 0) 5%,
+        rgba(0, 0, 0, 0) 94%,
+        rgba(0, 0, 0, 0.2)
+      ),
+      var(--spine, #fff);
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 0, 0, 0.16),
+      1px 0 2px rgba(0, 0, 0, 0.28);
+  }
+
+  .spine.dark {
+    color: #f3eee4;
+  }
+
+  .title {
+    max-height: 146px;
+    overflow: hidden;
+    writing-mode: vertical-rl;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--font-spine);
+    font-weight: 700;
+    font-size: 12.5px;
+    line-height: 1;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+  }
+
+  .slot:hover,
+  .slot:focus-within {
+    transform: translateY(-9px);
+  }
+
+  .slot:global(.dragging) {
+    z-index: 4;
+    transform: translateY(-16px);
+    transition: none;
+  }
+
+  .slot:global(.dragging) .spine {
+    cursor: grabbing;
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 0, 0, 0.16),
+      0 10px 16px rgba(0, 0, 0, 0.45);
+  }
+
+  @media (max-width: 819px) {
+    .slot {
+      flex: 0 0 40px;
+    }
+  }
+
+  @media (max-width: 499px) {
+    .slot {
+      flex: 0 0 44px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .slot {
+      transition: none;
+    }
+  }
+</style>

@@ -1,0 +1,41 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+import Wordmark from './Wordmark.astro';
+
+interface Props {
+  /** Null on the not-found page, which has nobody to name. */
+  heading: string | null;
+}
+
+const { heading } = Astro.props;
+---
+
+{
+  /* A visitor's chrome: no search, no avatar menu. The wordmark still links
+     home, which sends a signed-out visitor on to the login page. */
+}
+<header>
+  <Wordmark variant="bar" />
+  {heading && <p>{heading}</p>}
+  <div class="toggle"><ThemeToggle /></div>
+</header>
+
+<style>
+  header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 14px var(--gutter);
+  }
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .toggle {
+    margin-left: auto;
+  }
+</style>
