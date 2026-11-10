@@ -1,9 +1,13 @@
-import { errorJson, json } from './http';
+import { errorJson, json, unauthorized } from './http';
 import type { TmdbMovie } from './tmdb-mapping';
 
 export interface TmdbRequestContext {
   searchParams: URLSearchParams;
   method: string;
+  /** Whether the request carries a session. The only caller is the search
+   *  field, which exists only for a signed-in user; without this the route is
+   *  a free TMDB client for anyone who finds the URL, spent on our token. */
+  authenticated: boolean;
   token: string | undefined;
   fetch: typeof globalThis.fetch;
 }
@@ -71,6 +75,7 @@ export async function handleTmdbRequest(ctx: TmdbRequestContext): Promise<Respon
   if (ctx.method !== 'GET' && ctx.method !== 'HEAD') {
     return errorJson({ error: 'method not allowed' }, 405, { Allow: 'GET' });
   }
+  if (!ctx.authenticated) return unauthorized();
   if (!ctx.token) {
     console.error('[api/tmdb] TMDB_ACCESS_TOKEN is not set');
     return errorJson({ error: 'server misconfigured' }, 500);

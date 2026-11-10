@@ -21,6 +21,7 @@ beforeEach(() => {
 function makeCtx(qs: string, overrides: Partial<TmdbRequestContext> = {}): TmdbRequestContext {
   return {
     searchParams: new URLSearchParams(qs),
+    authenticated: true,
     method: 'GET',
     token: 'test-token',
     fetch: vi.fn(),
@@ -36,6 +37,14 @@ function failStatus(status: number) {
 }
 
 describe('handleTmdbRequest — validation', () => {
+  it('401 without a session, before spending the token on TMDB', async () => {
+    const ctx = makeCtx('op=search&query=matrix', { authenticated: false });
+    const res = await handleTmdbRequest(ctx);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect(ctx.fetch).not.toHaveBeenCalled();
+  });
+
   it('rejects non-GET with 405 + Allow: GET and does not call fetch', async () => {
     const ctx = makeCtx('op=search&query=matrix', { method: 'POST' });
     const res = await handleTmdbRequest(ctx);
