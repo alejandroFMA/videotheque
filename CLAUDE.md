@@ -27,15 +27,17 @@ order the owner sets by dragging. Visual reference: thecriterioncloset.com
 src/
   pages/
     index.astro        own shelves, requires a session
-    e/[slug].astro     anyone's public shelf, no login
-    api/tmdb.ts        TMDB proxy
+    u/[handle].astro   anyone's public profile, read-only, no login
+    api/tmdb.ts        TMDB proxy, requires a session
+    api/shelves/       shelf mutations (create, label, add, remove, reorder)
   layouts/             Layout.astro, the page shell every route renders into
-  components/          Shelf, Spine, SearchBar, FilmCase
-  lib/                 supabase.ts, tmdb.ts, colors.ts
+  components/          Bookcase, Shelf, Spine, FilmCase, SearchBar, Header
+  lib/                 supabase.ts, tmdb.ts, shelves.ts, profiles.ts, colors.ts
   types/               cross-cutting interfaces and type aliases
   constants/           cross-cutting constant values
   styles/              fonts.css, app.css (design tokens, shared chrome)
 public/fonts/          self-hosted woff2 + their licences
+public/textures/       the plank's walnut (Poly Haven, CC0)
 supabase/migrations/   <timestamp>_initial_schema.sql
 ```
 
@@ -49,7 +51,7 @@ supabase/migrations/   <timestamp>_initial_schema.sql
 
 ## Database
 
-Three tables, normalised from the start. Full SQL with policies lives in
+Four tables, normalised from the start. Full SQL with policies lives in
 `supabase/migrations/`.
 
 - `films`: global TMDB cache. Primary key is the TMDB id. Filled the first time
@@ -64,6 +66,16 @@ Three tables, normalised from the start. Full SQL with policies lives in
   display order within the shelf: `place_film` sets it when the film is added,
   `reorder_shelf` rewrites it on drag-and-drop. It is never shown, and gaps
   left by deletion are not compacted.
+- `profiles`: one row per account, seeded at sign-up. `display_name` is what
+  the header shows; `handle` addresses the public profile at `/u/<handle>`.
+  The table is readable only by its owner. A visitor's read goes through the
+  `profile_by_handle` function, so profiles cannot be listed — a profile
+  nobody has been sent the link to stays unlisted.
+
+A shelf's postit is its `name` drawn on its `accent_color` and lettered in its
+`accent_text_color`, both a `#rrggbb` the owner picks freely. A null
+`accent_color` means no postit; a null `accent_text_color` means the app picks
+white or ink by the card's luminance.
 
 Rules that do not bend:
 
@@ -84,8 +96,9 @@ Rules that do not bend:
   `POST /api/shelves/[id]/films`. The cache is global, so one client's bad row
   would be every shelf's bad row.
 
-Reading a shelf takes one call: PostgREST follows the foreign key with
-`.select('position, films(*)')`. The join is not written by hand.
+Reading a bookcase takes one call: PostgREST follows both foreign keys with
+`shelf_items(position, films(*))` on `shelves`. The join is not written by
+hand.
 
 ## Rejected decisions, and why
 
@@ -112,7 +125,10 @@ Reading a shelf takes one call: PostgREST follows the foreign key with
 extraction, the pull-out animation, the search box. Treat it as an interface
 reference, not as code to lift verbatim.
 
-Work order: TMDB proxy -> Supabase layer -> auth -> port the shelf to components.
+The shelf is ported: `src/components/Bookcase.astro` draws it for both the
+owner (`/`) and a visitor (`/u/<handle>`). The pulled-out case is the static
+view the visual spec names as its no-WebGL fallback; the Three.js case is not
+built yet.
 
 ## Constraints
 
