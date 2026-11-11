@@ -64,11 +64,18 @@ export const AUTH_SENT = `Enlace enviado a ${AUTH_EMAIL_TOKEN}. Ábrelo en este 
 
 export const AUTH_NO_ACCOUNT = 'No hay ninguna cuenta con ese correo. Crea una para empezar.';
 export const AUTH_SEND_FAILED = 'No se pudo enviar el enlace. Inténtalo otra vez.';
+export const AUTH_RATE_LIMITED =
+  'Ya hemos enviado un enlace hace poco. Mira tu correo (también la carpeta de spam) o espera un minuto antes de pedir otro.';
 export const AUTH_LINK_EXPIRED = 'Ese enlace ya no sirve. Pide uno nuevo.';
 
 // Supabase answers `shouldCreateUser: false` for an unknown address with this
 // code; it is the only way to tell "no account" from a real send failure.
 export const SUPABASE_OTP_DISABLED = 'otp_disabled';
+
+// Supabase returns this with HTTP 429 when the project's hourly email quota or
+// the per-address minimum interval between emails is hit. Retrying only extends
+// the wait, so it gets its own message rather than the generic send failure.
+export const SUPABASE_EMAIL_RATE_LIMIT = 'over_email_send_rate_limit';
 
 export const HOME_PAGE_TITLE = 'Tu estantería · Videothèque';
 
