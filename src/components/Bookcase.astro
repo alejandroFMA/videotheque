@@ -60,6 +60,34 @@ const allFull =
     padding: 6px 0 72px;
   }
 
+  /* The plank is sized in pixels for a laptop, so on a large monitor it sat
+     as a narrow strip in a wide wall. `zoom` scales the whole bookcase —
+     spines, planks, postits, gaps — and, unlike `transform: scale`, takes the
+     space it draws in, so the layout and the drag hit-testing stay true. */
+  @media (min-width: 1440px) {
+    .bookcase {
+      zoom: 1.2;
+    }
+  }
+
+  @media (min-width: 1800px) {
+    .bookcase {
+      zoom: 1.45;
+    }
+  }
+
+  @media (min-width: 2200px) {
+    .bookcase {
+      zoom: 1.75;
+    }
+  }
+
+  @media (min-width: 2800px) {
+    .bookcase {
+      zoom: 2.1;
+    }
+  }
+
   .hint {
     margin: 30px 0 0;
     max-width: 30ch;
