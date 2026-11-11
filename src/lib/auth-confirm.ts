@@ -11,6 +11,7 @@ import {
 export interface AuthConfirmContext {
   params: URLSearchParams;
   verifyOtp: (args: { token_hash: string; type: EmailOtpType }) => Promise<{ error: unknown }>;
+  exchangeCodeForSession: (code: string) => Promise<{ error: unknown }>;
 }
 
 export interface AuthConfirmResult {
@@ -47,23 +48,28 @@ export async function handleAuthConfirm(ctx: AuthConfirmContext): Promise<AuthCo
     location: `${LOGIN_PATH}?${LINK_ERROR_QUERY}`,
   };
 
+  // `token_hash` comes from our own email template. `code` comes from the
+  // hosted project's default one: Supabase verifies the link itself and hands
+  // back a PKCE code, which only the browser that asked for the link can
+  // redeem, because its verifier sits in that browser's cookies. The hosted
+  // project cannot use our template without custom SMTP, so both must work.
   const tokenHash = ctx.params.get('token_hash');
-  if (!tokenHash) {
-    console.warn('[auth/confirm] callback hit with no token_hash');
+  const code = ctx.params.get('code');
+  if (!tokenHash && !code) {
+    console.warn('[auth/confirm] callback hit with neither token_hash nor code');
     return failure;
   }
 
   try {
-    const { error } = await ctx.verifyOtp({
-      token_hash: tokenHash,
-      type: resolveType(ctx.params.get('type')),
-    });
+    const { error } = tokenHash
+      ? await ctx.verifyOtp({ token_hash: tokenHash, type: resolveType(ctx.params.get('type')) })
+      : await ctx.exchangeCodeForSession(code as string);
     if (error) {
-      console.warn('[auth/confirm] verifyOtp rejected the token', error);
+      console.warn('[auth/confirm] the link was rejected', error);
       return failure;
     }
   } catch (err) {
-    console.error('[auth/confirm] verifyOtp threw', err);
+    console.error('[auth/confirm] verifying the link threw', err);
     return failure;
   }
 
