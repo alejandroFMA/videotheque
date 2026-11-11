@@ -3,8 +3,12 @@ import { handleAuthConfirm } from '../src/lib/auth-confirm';
 
 const FAIL = '/login?error=link';
 
-function ctx(qs: string, verifyOtp = vi.fn().mockResolvedValue({ error: null })) {
-  return { params: new URLSearchParams(qs), verifyOtp };
+function ctx(
+  qs: string,
+  verifyOtp = vi.fn().mockResolvedValue({ error: null }),
+  exchangeCodeForSession = vi.fn().mockResolvedValue({ error: null }),
+) {
+  return { params: new URLSearchParams(qs), verifyOtp, exchangeCodeForSession };
 }
 
 beforeEach(() => {
@@ -75,5 +79,29 @@ describe('handleAuthConfirm', () => {
       expect.stringContaining('[auth/confirm]'),
       expect.any(Error),
     );
+  });
+
+  it('redeems a PKCE code from the default email template and redirects home', async () => {
+    const c = ctx('code=pkce-123');
+    const res = await handleAuthConfirm(c);
+    expect(c.exchangeCodeForSession).toHaveBeenCalledWith('pkce-123');
+    expect(c.verifyOtp).not.toHaveBeenCalled();
+    expect(res).toEqual({ status: 303, location: '/' });
+  });
+
+  it('prefers token_hash when a link carries both', async () => {
+    const c = ctx('token_hash=abc&type=email&code=pkce-123');
+    await handleAuthConfirm(c);
+    expect(c.verifyOtp).toHaveBeenCalled();
+    expect(c.exchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it('redirects to the link error when the code is rejected', async () => {
+    const c = ctx(
+      'code=stale',
+      undefined,
+      vi.fn().mockResolvedValue({ error: { message: 'bad' } }),
+    );
+    expect((await handleAuthConfirm(c)).location).toBe(FAIL);
   });
 });

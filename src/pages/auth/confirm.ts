@@ -13,6 +13,7 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
   const { status, location } = await handleAuthConfirm({
     params: url.searchParams,
     verifyOtp: (args) => supabase.auth.verifyOtp(args),
+    exchangeCodeForSession: (code) => supabase.auth.exchangeCodeForSession(code),
   });
 
   try {
