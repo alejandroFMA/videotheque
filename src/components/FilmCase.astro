@@ -229,6 +229,25 @@ const { editable } = Astro.props;
     }
   }
 
+  /* Grows with the bookcase on a large monitor; see Bookcase.astro. */
+  @media (min-width: 1440px) {
+    .case {
+      zoom: 1.2;
+    }
+  }
+
+  @media (min-width: 1800px) {
+    .case {
+      zoom: 1.45;
+    }
+  }
+
+  @media (min-width: 2200px) {
+    .case {
+      zoom: 1.6;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     dialog[open],
     .case {
