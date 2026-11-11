@@ -177,6 +177,10 @@ const { shelvedIds, shelves } = Astro.props;
   if (container && input && list && shelvedScript && status && slotsScript) {
     const shelved = new Set<number>(JSON.parse(shelvedScript.textContent ?? '[]'));
     const slots: ShelfSlot[] = JSON.parse(slotsScript.textContent ?? '[]');
+    // A double click or Enter-then-click calls pick again before the first add
+    // resolves; `shelved` only learns the film afterwards, so without this both
+    // calls pass the guard and the bookcase draws the spine twice.
+    const adding = new Set<number>();
     let results: TmdbSearchResult[] = [];
     let active = -1;
     let timer: number | undefined;
@@ -282,13 +286,19 @@ const { shelvedIds, shelves } = Astro.props;
 
     const pick = async (index: number) => {
       const film = results[index];
-      if (!film || shelved.has(film.id)) return;
+      if (!film || shelved.has(film.id) || adding.has(film.id)) return;
 
+      adding.add(film.id);
       status.textContent = SEARCH_ADDING;
-      // The colour has to exist before the request: the endpoint validates it,
-      // and it is the one value the browser is trusted with.
-      const spine = await spineFromPoster(film.poster_path ?? null, film.id);
-      const outcome = await addFilmToFirstShelfWithRoom(slots, { tmdbId: film.id, ...spine });
+      let outcome: Awaited<ReturnType<typeof addFilmToFirstShelfWithRoom>>;
+      try {
+        // The colour has to exist before the request: the endpoint validates it,
+        // and it is the one value the browser is trusted with.
+        const spine = await spineFromPoster(film.poster_path ?? null, film.id);
+        outcome = await addFilmToFirstShelfWithRoom(slots, { tmdbId: film.id, ...spine });
+      } finally {
+        adding.delete(film.id);
+      }
 
       if (!outcome.ok) {
         const message = outcome.reason === 'all_full' ? SHELF_FULL_MESSAGE : ADD_FAILED;
