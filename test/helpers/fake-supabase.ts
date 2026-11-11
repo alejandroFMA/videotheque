@@ -22,6 +22,7 @@ class FakeBuilder implements PromiseLike<FakeResult> {
   select = (...a: unknown[]) => this.push('select', ...a);
   insert = (...a: unknown[]) => this.push('insert', ...a);
   upsert = (...a: unknown[]) => this.push('upsert', ...a);
+  update = (...a: unknown[]) => this.push('update', ...a);
   delete = (...a: unknown[]) => this.push('delete', ...a);
   eq = (...a: unknown[]) => this.push('eq', ...a);
   in = (...a: unknown[]) => this.push('in', ...a);

@@ -1,5 +1,6 @@
 import { SHELF_CAPACITY } from '../constants';
 import type { Spine } from './colors';
+import type { FilmRecord } from './shelves';
 
 /**
  * Where a film picked from search lands. Films get dragged into order
@@ -18,18 +19,20 @@ export interface ShelfSlot {
 }
 
 export type AddOutcome =
-  { ok: true; shelfId: string; position: number } | { ok: false; reason: 'all_full' | 'failed' };
+  | { ok: true; shelfId: string; position: number; film: FilmRecord }
+  | { ok: false; reason: 'all_full' | 'failed' };
 
 function hasRoom(shelf: ShelfSlot): boolean {
   return shelf.filmCount < SHELF_CAPACITY;
 }
 
-function hasNumericPosition(body: unknown): body is { position: number } {
-  return (
-    typeof body === 'object' &&
-    body !== null &&
-    typeof (body as { position?: unknown }).position === 'number'
-  );
+/** Checks only what the page goes on to draw a spine from. */
+function isPlacedFilm(body: unknown): body is { position: number; film: FilmRecord } {
+  if (typeof body !== 'object' || body === null) return false;
+  const { position, film } = body as { position?: unknown; film?: unknown };
+  if (typeof position !== 'number' || typeof film !== 'object' || film === null) return false;
+  const { id, title, spine_color: spineColor } = film as Record<string, unknown>;
+  return typeof id === 'number' && typeof title === 'string' && typeof spineColor === 'string';
 }
 
 export function firstShelfWithRoom(shelves: ShelfSlot[]): ShelfSlot | null {
@@ -66,8 +69,8 @@ export async function addFilmToFirstShelfWithRoom(
       } catch {
         return { ok: false, reason: 'failed' };
       }
-      if (!hasNumericPosition(body)) return { ok: false, reason: 'failed' };
-      return { ok: true, shelfId: shelf.id, position: body.position };
+      if (!isPlacedFilm(body)) return { ok: false, reason: 'failed' };
+      return { ok: true, shelfId: shelf.id, position: body.position, film: body.film };
     }
     if (response.status !== SHELF_FULL_STATUS) return { ok: false, reason: 'failed' };
   }

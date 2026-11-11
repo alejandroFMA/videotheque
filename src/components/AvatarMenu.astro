@@ -1,11 +1,19 @@
 ---
-import { ACCOUNT_MENU_LABEL, SIGN_OUT, SIGNOUT_PATH } from '../constants';
+import {
+  ACCOUNT_MENU_LABEL,
+  PROFILE_PATH_PREFIX,
+  SHARE_PROFILE,
+  SIGN_OUT,
+  SIGNOUT_PATH,
+} from '../constants';
 
 interface Props {
   displayName: string;
+  /** Null when the profile failed to load; there is then no link to share. */
+  handle: string | null;
 }
 
-const { displayName } = Astro.props;
+const { displayName, handle } = Astro.props;
 
 const INITIALS_WORDS = 2;
 // A seeded name is the email's local part and has no spaces, so one letter is
@@ -30,6 +38,18 @@ const initials = displayName
          relationship (menu > menuitem). Form-association attribute wires the
          button to it. Necessary for semantic correctness; will accommodate
          multiple menu items when Settings is added later. -->
+    {
+      handle && (
+        <button
+          type="button"
+          id="share-profile"
+          role="menuitem"
+          data-path={`${PROFILE_PATH_PREFIX}${handle}`}
+        >
+          {SHARE_PROFILE}
+        </button>
+      )
+    }
     <button type="submit" form="sign-out-form" role="menuitem">{SIGN_OUT}</button>
   </div>
 </div>
@@ -108,6 +128,10 @@ const initials = displayName
 </style>
 
 <script>
+  import { SHARE_COPIED, SHARE_FAILED, SHARE_PROFILE } from '../constants';
+
+  const SHARE_FEEDBACK_MS = 2000;
+
   const button = document.querySelector<HTMLButtonElement>('#avatar-button');
   const menu = document.querySelector<HTMLElement>('#avatar-menu');
   const account = document.querySelector<HTMLElement>('.account');
@@ -135,6 +159,18 @@ const initials = displayName
     document.addEventListener('pointerdown', (event) => {
       const target = event.target as Node;
       if (!menu.hidden && !menu.contains(target) && !button.contains(target)) close();
+    });
+
+    const share = document.querySelector<HTMLButtonElement>('#share-profile');
+    share?.addEventListener('click', async () => {
+      // The menu stays open so the button itself can say what happened.
+      try {
+        await navigator.clipboard.writeText(`${location.origin}${share.dataset.path}`);
+        share.textContent = SHARE_COPIED;
+      } catch {
+        share.textContent = SHARE_FAILED;
+      }
+      window.setTimeout(() => (share.textContent = SHARE_PROFILE), SHARE_FEEDBACK_MS);
     });
 
     // Keyboard navigation: close menu when focus leaves the account container.

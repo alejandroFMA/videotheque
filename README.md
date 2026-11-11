@@ -2,8 +2,8 @@
 
 A film shelf. Each user owns one or more themed shelves and fills them by
 searching [TMDB](https://www.themoviedb.org/). Films stand on a wooden board as
-case spines in an order the owner sets by dragging. A shelf marked public is
-shareable at `/e/<slug>` with no login. Visual reference:
+case spines in an order the owner sets by dragging. Public shelves are
+shareable as a profile at `/u/<handle>` with no login. Visual reference:
 [thecriterioncloset.com](https://www.thecriterioncloset.com/).
 
 ## Stack
@@ -44,11 +44,11 @@ Stop the stack with `supabase stop`.
 
 Set in `.env` locally (gitignored) and in the Vercel dashboard for deploys.
 
-| Variable            | Required | Notes                                                                                                                                    |
-| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `TMDB_ACCESS_TOKEN` | yes      | TMDB v4 "API Read Access Token" (Bearer). Server-only — never sent to the browser. Get one at <https://www.themoviedb.org/settings/api>. |
-
-Supabase URL / anon-key variables are added in the Supabase-layer cycle.
+| Variable                   | Required | Notes                                                                                                                                     |
+| -------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `TMDB_ACCESS_TOKEN`        | yes      | TMDB v4 "API Read Access Token" (Bearer). Server-only — never sent to the browser. Get one at <https://www.themoviedb.org/settings/api>.  |
+| `PUBLIC_SUPABASE_URL`      | yes      | Project URL. Locally, the `API_URL` that `npm run db:status` prints.                                                                      |
+| `PUBLIC_SUPABASE_ANON_KEY` | yes      | The publishable/anon key. Public by design; row level security is the protection. Inlined at build time, so changing it needs a redeploy. |
 
 ## Database — local workflow
 
@@ -138,13 +138,16 @@ commit messages, comments, model selection.
 src/
   pages/
     index.astro        own shelves, requires a session
-    e/[slug].astro     anyone's public shelf, no login
+    u/[handle].astro   anyone's public profile, read-only, no login
     api/tmdb.ts         TMDB proxy endpoint (wraps src/lib/tmdb-proxy.ts)
-  components/           Shelf, Spine, SearchBar, FilmCase
-  lib/                  tmdb.ts, tmdb-proxy.ts, supabase.ts, colors.ts
+    api/shelves/        shelf mutations (create, label, add, remove, reorder)
+  layouts/              Layout.astro
+  components/           Bookcase, Shelf, Spine, FilmCase, SearchBar, Header
+  lib/                  shelves.ts, profiles.ts, tmdb-proxy.ts, supabase.ts, colors.ts
   types/                cross-cutting interfaces and type aliases
-  constants/            cross-cutting constant values
+  constants/            cross-cutting constant values, all interface copy
   styles/
+public/                 self-hosted fonts, the plank texture, the TMDB mark
 supabase/
   migrations/           hand-authored schema history
   tests/schema_checks.sql
@@ -152,20 +155,47 @@ test/                    Vitest suites + fixtures
 docs/superpowers/        specs and implementation plans
 ```
 
-Not every file exists yet — see the work order in `CLAUDE.md`.
-
 ## Deployment
 
-Pushed to Vercel. The `@astrojs/vercel` adapter turns the SSR routes into Vercel
-functions at build time. Set `TMDB_ACCESS_TOKEN` (and, later, the Supabase
-variables) in the Vercel project settings. It is read at runtime via
+Vercel, built from this GitHub repository. The `@astrojs/vercel` adapter turns
+the SSR routes into Vercel functions at build time.
+
+First deploy:
+
+1. **Database.** Apply the migrations to the hosted Supabase project:
+
+   ```bash
+   supabase login
+   supabase link --project-ref <project-ref>
+   supabase migration list     # local vs remote
+   supabase db push
+   ```
+
+2. **Vercel project.** Import the GitHub repository at
+   <https://vercel.com/new>. The framework preset (Astro) needs no changes.
+   Set the three variables from [Environment variables](#environment-variables)
+   for Production and Preview **before** the first build: the two `PUBLIC_`
+   ones are inlined at build time, and a production build without them fails
+   on purpose (see `astro.config.mjs`).
+
+3. **Magic-link redirects.** In the Supabase dashboard, under Authentication →
+   URL Configuration, set the Site URL to the production URL and add
+   `https://<production-domain>/auth/confirm` to the redirect URLs. Without it
+   the emailed link is refused. The email template in
+   `supabase/templates/confirm.html` is used by the local stack only; paste it
+   into both Authentication → Email Templates → Confirm signup and → Magic Link
+   on the hosted project (see [`supabase/README.md`](supabase/README.md)).
+
+4. **Email.** Supabase's built-in sender is rate-limited to a handful of
+   messages an hour and meant for testing. Configure custom SMTP before
+   inviting anyone.
+
+After that, every merge to `main` deploys to production and every pull request
+gets a preview URL. `TMDB_ACCESS_TOKEN` is read at runtime via
 `astro:env/server` (`getSecret`), so rotating it needs no rebuild.
 
-### Follow-ups before a public deploy
-
-- **`/api/tmdb` is currently unauthenticated.** Abuse control (origin check +
-  rate limit) lands with the auth cycle. Do not deploy the proxy on a public URL
-  before then.
+`/api/tmdb` answers only to a signed-in session, so the TMDB token cannot be
+spent by a stranger who finds the URL.
 
 ### Security notes
 

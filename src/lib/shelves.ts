@@ -19,24 +19,45 @@ export interface FilmRecord extends FilmRow, SpineColour {
   fetched_at: string;
 }
 
-export interface ShelfSummary {
+export interface ShelfItem {
+  position: number;
+  films: FilmRecord;
+}
+
+export interface ShelfWithFilms {
   id: string;
   name: string;
   slug: string;
   accent_color: string | null;
+  /** Null letters the postit automatically, by the card's luminance. */
+  accent_text_color: string | null;
   is_public: boolean;
-  /** PostgREST returns an aggregate as a one-element array. */
-  shelf_items: { count: number }[];
+  shelf_items: ShelfItem[];
 }
 
-const SHELF_SUMMARY_COLUMNS = 'id, name, slug, accent_color, is_public, shelf_items(count)';
+/** Either the postit goes, or it is replaced whole: a name with no colour
+ *  draws nothing, so the two are never written apart. */
+export type ShelfLabelChange =
+  { accent_color: null } | { name: string; accent_color: string; accent_text_color: string };
+
+const SHELF_WITH_FILMS_COLUMNS =
+  'id, name, slug, accent_color, accent_text_color, is_public, shelf_items(position, films(*))';
+
+/** Sorted here rather than in the query: the order is the whole point of
+ *  `position`, so it should not hang on an embedded-resource option. */
+export function filmsInOrder(shelf: ShelfWithFilms): FilmRecord[] {
+  return [...shelf.shelf_items].sort((a, b) => a.position - b.position).map((item) => item.films);
+}
 
 /** The shape the browser's add flow needs: id and how full it is. */
-export function toShelfSlots(shelves: ShelfSummary[]): ShelfSlot[] {
-  return shelves.map((shelf) => ({
-    id: shelf.id,
-    filmCount: shelf.shelf_items[0]?.count ?? 0,
-  }));
+export function toShelfSlots(shelves: ShelfWithFilms[]): ShelfSlot[] {
+  return shelves.map((shelf) => ({ id: shelf.id, filmCount: shelf.shelf_items.length }));
+}
+
+/** Every film id on these shelves, for the search dropdown's "already there"
+ *  badge. */
+export function shelvedFilmIds(shelves: ShelfWithFilms[]): number[] {
+  return shelves.flatMap((shelf) => shelf.shelf_items.map((item) => item.films.id));
 }
 
 function fail(operation: string, error: { message: string }): never {
@@ -126,23 +147,41 @@ export async function reorderShelf(sb: Db, shelfId: string, order: number[]): Pr
   if (error) fail('reorderShelf', error);
 }
 
-/** `.eq('owner', …)` is REQUIRED: the SELECT policy also exposes other users'
- *  public shelves, so RLS alone would not scope this list to the caller. */
-export async function listOwnShelves(sb: Db, owner: string): Promise<ShelfSummary[]> {
-  const { data, error } = await sb
-    .from('shelves')
-    .select(SHELF_SUMMARY_COLUMNS)
-    .eq('owner', owner)
-    .order('created_at', { ascending: true });
-  if (error) fail('listOwnShelves', error);
-  return (data as ShelfSummary[] | null) ?? [];
+/**
+ * One call for everything a bookcase draws: PostgREST follows both foreign
+ * keys, and nothing here reaches TMDB.
+ *
+ * `.eq('owner', …)` is REQUIRED: the SELECT policy also exposes other users'
+ * public shelves, so RLS alone would not scope this list to one person.
+ * `publicOnly` is for a visitor's view of that person, where RLS would hide the
+ * private shelves from a stranger but not from the owner looking at their own
+ * public page.
+ */
+export async function listShelvesWithFilms(
+  sb: Db,
+  owner: string,
+  { publicOnly = false }: { publicOnly?: boolean } = {},
+): Promise<ShelfWithFilms[]> {
+  let query = sb.from('shelves').select(SHELF_WITH_FILMS_COLUMNS).eq('owner', owner);
+  if (publicOnly) query = query.eq('is_public', true);
+  const { data, error } = await query.order('created_at', { ascending: true });
+  if (error) fail('listShelvesWithFilms', error);
+  // The untyped client cannot know `films` is the one side of the foreign key
+  // and infers an array, hence the double cast.
+  return (data as unknown as ShelfWithFilms[] | null) ?? [];
 }
 
-/** Every film id already on one of this user's shelves, for the search
- *  dropdown's "already there" badge. Reads the cache, never TMDB. */
-export async function listShelvedFilmIds(sb: Db, shelfIds: string[]): Promise<number[]> {
-  if (shelfIds.length === 0) return [];
-  const { data, error } = await sb.from('shelf_items').select('film_id').in('shelf_id', shelfIds);
-  if (error) fail('listShelvedFilmIds', error);
-  return ((data as { film_id: number }[] | null) ?? []).map((row) => row.film_id);
+export async function createShelf(sb: Db, owner: string, slug: string): Promise<{ id: string }> {
+  const { data, error } = await sb.from('shelves').insert({ owner, slug }).select('id').single();
+  if (error) fail('createShelf', error);
+  return data as { id: string };
+}
+
+export async function updateShelfLabel(
+  sb: Db,
+  shelfId: string,
+  change: ShelfLabelChange,
+): Promise<void> {
+  const { error } = await sb.from('shelves').update(change).eq('id', shelfId);
+  if (error) fail('updateShelfLabel', error);
 }

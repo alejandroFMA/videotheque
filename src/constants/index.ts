@@ -90,3 +90,49 @@ export const ACCOUNT_MENU_LABEL = 'Tu cuenta';
 export const SIGN_OUT = 'Cerrar sesión';
 
 export const SHELVES_LOAD_FAILED = 'No se pudieron cargar tus estanterías.';
+
+// A public profile lives at PROFILE_PATH_PREFIX + handle.
+export const PROFILE_PATH_PREFIX = '/u/';
+
+// Dispatched on `document` so the search field and the bookcase, which are
+// separate components with separate scripts, stay in step without a reload.
+export const FILM_ADDED_EVENT = 'shelf:film-added';
+export const FILM_REMOVED_EVENT = 'shelf:film-removed';
+
+export const SHELF_EMPTY_HINT = 'Tu estantería está vacía. Busca una película para archivarla.';
+export const ADD_SHELF = '+ Añadir balda';
+export const ADD_SHELF_FAILED = 'No se pudo añadir la balda. Inténtalo otra vez.';
+export const REORDER_FAILED = 'No se pudo guardar el orden. Inténtalo otra vez.';
+
+export const CASE_REMOVE = 'Quitar de la estantería';
+export const CASE_REMOVE_FAILED = 'No se pudo quitar la película. Inténtalo otra vez.';
+export const CASE_CLOSE = 'Cerrar';
+export const CASE_NO_OVERVIEW = 'Sin sinopsis.';
+
+// The postit is a shelf's `name` drawn on its `accent_color`, which the owner
+// picks freely. This is what the picker opens on for a shelf with no postit.
+export const LABEL_MAX_LENGTH = 24;
+export const POSTIT_DEFAULT_COLOR = '#9e2f26';
+export const POSTIT_DEFAULT_TEXT_COLOR = '#ffffff';
+
+export const LABEL_ADD = '+ Etiqueta';
+export const LABEL_EDIT = 'Editar etiqueta';
+export const LABEL_DIALOG_TITLE = 'Etiqueta de la balda';
+export const LABEL_NAME = 'Nombre';
+export const LABEL_COLOR = 'Color del postit';
+export const LABEL_TEXT_COLOR = 'Color del texto';
+export const LABEL_SAVE = 'Guardar';
+export const LABEL_REMOVE = 'Quitar etiqueta';
+export const LABEL_CANCEL = 'Cancelar';
+export const LABEL_SAVE_FAILED = 'No se pudo guardar la etiqueta. Inténtalo otra vez.';
+
+export const SHARE_PROFILE = 'Compartir perfil';
+export const SHARE_COPIED = 'Enlace copiado';
+export const SHARE_FAILED = 'No se pudo copiar el enlace';
+
+// Replaced with the display name at the call site, like AUTH_EMAIL_TOKEN.
+export const PROFILE_NAME_TOKEN = '{name}';
+export const PUBLIC_SHELF_OF = `Estantería de ${PROFILE_NAME_TOKEN}`;
+export const PUBLIC_NOT_FOUND = 'Aquí no hay ninguna estantería.';
+export const PUBLIC_NOT_FOUND_TITLE = 'No encontrada · Videothèque';
+export const PUBLIC_EMPTY = 'Esta estantería todavía está vacía.';

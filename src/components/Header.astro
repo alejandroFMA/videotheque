@@ -7,11 +7,12 @@ import type { ShelfSlot } from '../lib/shelf-target';
 
 interface Props {
   displayName: string;
+  handle: string | null;
   shelvedIds: number[];
   shelves: ShelfSlot[];
 }
 
-const { displayName, shelvedIds, shelves } = Astro.props;
+const { displayName, handle, shelvedIds, shelves } = Astro.props;
 ---
 
 <header>
@@ -33,7 +34,7 @@ const { displayName, shelvedIds, shelves } = Astro.props;
 
   <div class="cluster">
     <ThemeToggle />
-    <AvatarMenu displayName={displayName} />
+    <AvatarMenu displayName={displayName} handle={handle} />
   </div>
 </header>
 

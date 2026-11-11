@@ -3,6 +3,7 @@ import { addFilmToFirstShelfWithRoom, firstShelfWithRoom } from '../src/lib/shel
 import { SHELF_CAPACITY } from '../src/constants';
 
 const FILM = { tmdbId: 603, spineColor: 'hsl(210 42% 40%)', spineDark: true };
+const PLACED = { id: 603, title: 'The Matrix', spine_color: 'hsl(210 42% 40%)', spine_dark: true };
 const full = (id: string) => ({ id, filmCount: SHELF_CAPACITY });
 const room = (id: string) => ({ id, filmCount: 1 });
 
@@ -30,11 +31,11 @@ describe('firstShelfWithRoom', () => {
 
 describe('addFilmToFirstShelfWithRoom', () => {
   it('posts the film and its spine to the first shelf with room', async () => {
-    const doFetch = vi.fn().mockResolvedValue(reply(201, { position: 4 }));
+    const doFetch = vi.fn().mockResolvedValue(reply(201, { position: 4, film: PLACED }));
 
     const outcome = await addFilmToFirstShelfWithRoom([full('a'), room('b')], FILM, doFetch);
 
-    expect(outcome).toEqual({ ok: true, shelfId: 'b', position: 4 });
+    expect(outcome).toEqual({ ok: true, shelfId: 'b', position: 4, film: PLACED });
     expect(doFetch).toHaveBeenCalledTimes(1);
     const [url, init] = doFetch.mock.calls[0];
     expect(url).toBe('/api/shelves/b/films');
@@ -46,11 +47,11 @@ describe('addFilmToFirstShelfWithRoom', () => {
     const doFetch = vi
       .fn()
       .mockResolvedValueOnce(reply(409, { error: 'shelf_full' }))
-      .mockResolvedValueOnce(reply(201, { position: 0 }));
+      .mockResolvedValueOnce(reply(201, { position: 0, film: PLACED }));
 
     const outcome = await addFilmToFirstShelfWithRoom([room('a'), room('b')], FILM, doFetch);
 
-    expect(outcome).toEqual({ ok: true, shelfId: 'b', position: 0 });
+    expect(outcome).toEqual({ ok: true, shelfId: 'b', position: 0, film: PLACED });
     expect(doFetch.mock.calls.map(([url]) => url)).toEqual([
       '/api/shelves/a/films',
       '/api/shelves/b/films',
@@ -106,6 +107,15 @@ describe('addFilmToFirstShelfWithRoom', () => {
 
   it('reports failed when a 2xx body has no position', async () => {
     const doFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 201 }));
+
+    expect(await addFilmToFirstShelfWithRoom([room('a')], FILM, doFetch)).toEqual({
+      ok: false,
+      reason: 'failed',
+    });
+  });
+
+  it('reports failed when a 2xx body carries no film to draw', async () => {
+    const doFetch = vi.fn().mockResolvedValue(reply(201, { position: 3 }));
 
     expect(await addFilmToFirstShelfWithRoom([room('a')], FILM, doFetch)).toEqual({
       ok: false,

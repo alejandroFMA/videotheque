@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { fakeSupabase } from './helpers/fake-supabase';
 import {
+  createShelf,
   ensureFilmCached,
+  filmsInOrder,
   findOwnShelf,
-  listOwnShelves,
-  listShelvedFilmIds,
+  listShelvesWithFilms,
   placeFilm,
   removeFilm,
   reorderShelf,
   shelfHasFilm,
   shelfItemCount,
+  shelvedFilmIds,
   toShelfSlots,
+  updateShelfLabel,
+  type ShelfWithFilms,
 } from '../src/lib/shelves';
 
 const SHELF = '11111111-2222-3333-4444-555555555555';
@@ -148,55 +152,115 @@ describe('removeFilm', () => {
   });
 });
 
-describe('listOwnShelves', () => {
+const film = (id: number) => ({ ...FILM_ROW, ...SPINE, id, fetched_at: '2026-01-01' });
+
+function shelfWith(id: string, items: [position: number, filmId: number][]): ShelfWithFilms {
+  return {
+    id,
+    name: 'My shelf',
+    slug: id,
+    accent_color: null,
+    accent_text_color: null,
+    is_public: true,
+    shelf_items: items.map(([position, filmId]) => ({ position, films: film(filmId) })),
+  };
+}
+
+describe('listShelvesWithFilms', () => {
   it('filters by owner, because the SELECT policy also exposes public shelves', async () => {
     const sb = fakeSupabase({ shelves: { data: [], error: null } });
-    await listOwnShelves(sb.client, OWNER);
+    await listShelvesWithFilms(sb.client, OWNER);
     expect(sb.opsFor('shelves')).toEqual(expect.arrayContaining([['eq', 'owner', OWNER]]));
+    expect(sb.opsFor('shelves')).not.toEqual(expect.arrayContaining([['eq', 'is_public', true]]));
+  });
+
+  it('reads the films through the foreign key in the same call', async () => {
+    const sb = fakeSupabase({ shelves: { data: [], error: null } });
+    await listShelvesWithFilms(sb.client, OWNER);
+    const [, columns] = sb.opsFor('shelves')[0];
+    expect(columns).toContain('shelf_items(position, films(*))');
+    expect(sb.tableCalls('shelves')).toBe(1);
+  });
+
+  it("keeps private shelves out of a visitor's view", async () => {
+    const sb = fakeSupabase({ shelves: { data: [], error: null } });
+    await listShelvesWithFilms(sb.client, OWNER, { publicOnly: true });
+    expect(sb.opsFor('shelves')).toEqual(expect.arrayContaining([['eq', 'is_public', true]]));
   });
 
   it('orders oldest first and returns an array when data is null', async () => {
     const sb = fakeSupabase({ shelves: { data: null, error: null } });
-    expect(await listOwnShelves(sb.client, OWNER)).toEqual([]);
+    expect(await listShelvesWithFilms(sb.client, OWNER)).toEqual([]);
     expect(sb.opsFor('shelves')).toEqual(
       expect.arrayContaining([['order', 'created_at', { ascending: true }]]),
     );
   });
+
+  it('throws when Supabase reports an error', async () => {
+    const sb = fakeSupabase({ shelves: { data: null, error: { message: 'boom' } } });
+    await expect(listShelvesWithFilms(sb.client, OWNER)).rejects.toThrow(/boom/);
+  });
+});
+
+describe('filmsInOrder', () => {
+  it('sorts by position, whatever order the rows came back in', () => {
+    const shelf = shelfWith('a', [
+      [3, 30],
+      [1, 10],
+      [2, 20],
+    ]);
+    expect(filmsInOrder(shelf).map((f) => f.id)).toEqual([10, 20, 30]);
+    // The caller's rows are left as they were.
+    expect(shelf.shelf_items.map((item) => item.position)).toEqual([3, 1, 2]);
+  });
 });
 
 describe('toShelfSlots', () => {
-  it('flattens the PostgREST count aggregate', () => {
+  it('counts the films on each shelf', () => {
     expect(
       toShelfSlots([
-        {
-          id: 'a',
-          name: 'A',
-          slug: 'a',
-          accent_color: null,
-          is_public: true,
-          shelf_items: [{ count: 7 }],
-        },
-        { id: 'b', name: 'B', slug: 'b', accent_color: null, is_public: true, shelf_items: [] },
+        shelfWith('a', [
+          [1, 10],
+          [2, 20],
+        ]),
+        shelfWith('b', []),
       ]),
     ).toEqual([
-      { id: 'a', filmCount: 7 },
+      { id: 'a', filmCount: 2 },
       { id: 'b', filmCount: 0 },
     ]);
   });
 });
 
-describe('listShelvedFilmIds', () => {
-  it('returns nothing without asking when the user has no shelves', async () => {
-    const sb = fakeSupabase({ shelf_items: { data: null, error: null } });
-    expect(await listShelvedFilmIds(sb.client, [])).toEqual([]);
-    expect(sb.opsFor('shelf_items')).toEqual([]);
+describe('shelvedFilmIds', () => {
+  it('collects the ids across every shelf', () => {
+    expect(shelvedFilmIds([shelfWith('a', [[1, 603]]), shelfWith('b', [[1, 604]])])).toEqual([
+      603, 604,
+    ]);
+  });
+});
+
+describe('createShelf', () => {
+  it('inserts a shelf for the owner and returns its id', async () => {
+    const sb = fakeSupabase({ shelves: { data: { id: SHELF }, error: null } });
+    expect(await createShelf(sb.client, OWNER, 'abc123')).toEqual({ id: SHELF });
+    expect(sb.opsFor('shelves')[0]).toEqual(['insert', { owner: OWNER, slug: 'abc123' }]);
   });
 
-  it('flattens the rows to plain ids, scoped to the given shelves', async () => {
-    const sb = fakeSupabase({
-      shelf_items: { data: [{ film_id: 603 }, { film_id: 604 }], error: null },
-    });
-    expect(await listShelvedFilmIds(sb.client, [SHELF])).toEqual([603, 604]);
-    expect(sb.opsFor('shelf_items')).toEqual(expect.arrayContaining([['in', 'shelf_id', [SHELF]]]));
+  it('throws when Supabase reports an error', async () => {
+    const sb = fakeSupabase({ shelves: { data: null, error: { message: 'boom' } } });
+    await expect(createShelf(sb.client, OWNER, 'abc123')).rejects.toThrow(/boom/);
+  });
+});
+
+describe('updateShelfLabel', () => {
+  it('writes the change to the one shelf', async () => {
+    const sb = fakeSupabase({ shelves: { data: null, error: null } });
+    const change = { name: 'Terror', accent_color: '#9e2f26', accent_text_color: '#ffffff' };
+    await updateShelfLabel(sb.client, SHELF, change);
+    expect(sb.opsFor('shelves')).toEqual([
+      ['update', change],
+      ['eq', 'id', SHELF],
+    ]);
   });
 });

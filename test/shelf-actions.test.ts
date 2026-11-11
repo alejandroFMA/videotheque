@@ -3,11 +3,13 @@ import { readFileSync } from 'node:fs';
 import { fakeSupabase } from './helpers/fake-supabase';
 import {
   handleAddFilm,
+  handleCreateShelf,
   handleRemoveFilm,
   handleReorderShelf,
+  handleUpdateShelf,
   readJson,
 } from '../src/lib/shelf-actions';
-import { SHELF_CAPACITY, SHELF_FULL_MESSAGE } from '../src/constants';
+import { LABEL_MAX_LENGTH, SHELF_CAPACITY, SHELF_FULL_MESSAGE } from '../src/constants';
 
 const SHELF = '11111111-2222-3333-4444-555555555555';
 const OWNER = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
@@ -523,5 +525,99 @@ describe('handleAddFilm — failures', () => {
       fetch: tmdbOk(),
     });
     expect(res.status).toBe(500);
+  });
+});
+
+describe('handleCreateShelf', () => {
+  it('401 when there is no session, without touching the database', async () => {
+    const sb = fakeSupabase({});
+    const res = await handleCreateShelf({ supabase: sb.client, owner: undefined, slug: 'abc' });
+    expect(res.status).toBe(401);
+    expect(sb.from).not.toHaveBeenCalled();
+  });
+
+  it('201 with the new id, owned by the caller', async () => {
+    const sb = fakeSupabase({ shelves: { data: { id: SHELF }, error: null } });
+    const res = await handleCreateShelf({ supabase: sb.client, owner: OWNER, slug: 'abc' });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ id: SHELF });
+    expect(sb.opsFor('shelves')[0]).toEqual(['insert', { owner: OWNER, slug: 'abc' }]);
+  });
+
+  it('500 with a fixed body when the insert fails', async () => {
+    const sb = fakeSupabase({ shelves: { data: null, error: { message: 'secret detail' } } });
+    const res = await handleCreateShelf({ supabase: sb.client, owner: OWNER, slug: 'abc' });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'internal error' });
+  });
+});
+
+describe('handleUpdateShelf', () => {
+  const COLOUR = '#2f6f74';
+  const INK = '#ffffff';
+  const update = (body: unknown, sb = ownedShelf()) =>
+    handleUpdateShelf({ supabase: sb.client, owner: OWNER, shelfId: SHELF, body }).then((res) => ({
+      res,
+      sb,
+    }));
+
+  it('404 when the shelf belongs to someone else', async () => {
+    const { res } = await update(
+      { name: 'Terror', accentColor: COLOUR, textColor: INK },
+      fakeSupabase({ shelves: { data: null, error: null } }),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('writes a trimmed name with its colour', async () => {
+    const { res, sb } = await update({ name: '  Terror ', accentColor: COLOUR, textColor: INK });
+    expect(res.status).toBe(204);
+    expect(sb.opsFor('shelves', 1)[0]).toEqual([
+      'update',
+      { name: 'Terror', accent_color: COLOUR, accent_text_color: INK },
+    ]);
+  });
+
+  it('stores the colour lower-cased, whatever case the picker sent', async () => {
+    const { sb } = await update({ name: 'Terror', accentColor: '#2F6F74', textColor: '#FFFFFF' });
+    expect(sb.opsFor('shelves', 1)[0]).toEqual([
+      'update',
+      { name: 'Terror', accent_color: COLOUR, accent_text_color: INK },
+    ]);
+  });
+
+  it('takes the postit off without touching the name', async () => {
+    const { res, sb } = await update({ accentColor: null });
+    expect(res.status).toBe(204);
+    expect(sb.opsFor('shelves', 1)[0]).toEqual(['update', { accent_color: null }]);
+  });
+
+  it.each([
+    ['no body', null],
+    ['an empty name', { name: '   ', accentColor: COLOUR, textColor: INK }],
+    [
+      'a name over the limit',
+      { name: 'x'.repeat(LABEL_MAX_LENGTH + 1), accentColor: COLOUR, textColor: INK },
+    ],
+    [
+      'a colour that is not #rrggbb',
+      { name: 'Terror', accentColor: 'hsl(1 1% 1%)', textColor: INK },
+    ],
+    ['a short hex', { name: 'Terror', accentColor: '#fff', textColor: INK }],
+    [
+      'a colour that is really CSS',
+      { name: 'Terror', accentColor: 'red;position:fixed', textColor: INK },
+    ],
+    ['a missing colour', { name: 'Terror', textColor: INK }],
+    ['a missing text colour', { name: 'Terror', accentColor: '#2f6f74' }],
+    [
+      'a text colour that is really CSS',
+      { name: 'Terror', accentColor: '#2f6f74', textColor: 'red;top:0' },
+    ],
+  ])('400 for %s, without writing', async (_case, body) => {
+    const { res, sb } = await update(body);
+    expect(res.status).toBe(400);
+    // Only the ownership lookup ran.
+    expect(sb.tableCalls('shelves')).toBe(1);
   });
 });

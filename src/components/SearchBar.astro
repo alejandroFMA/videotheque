@@ -149,8 +149,11 @@ const { shelvedIds, shelves } = Astro.props;
   import { posterUrl, searchFilms, type TmdbSearchResult } from '../lib/tmdb';
   import { spineFromPoster } from '../lib/colors';
   import { addFilmToFirstShelfWithRoom, type ShelfSlot } from '../lib/shelf-target';
+  import type { FilmAddedDetail, FilmRemovedDetail } from '../types';
   import {
     ADD_FAILED,
+    FILM_ADDED_EVENT,
+    FILM_REMOVED_EVENT,
     SEARCH_ADDING,
     SEARCH_EMPTY,
     SEARCH_FAILED,
@@ -299,7 +302,22 @@ const { shelvedIds, shelves } = Astro.props;
       if (slot) slot.filmCount += 1;
       status.textContent = '';
       paint();
+      document.dispatchEvent(
+        new CustomEvent<FilmAddedDetail>(FILM_ADDED_EVENT, {
+          detail: { shelfId: outcome.shelfId, film: outcome.film },
+        }),
+      );
     };
+
+    // The bookcase removes films without a reload, so the badge and the room
+    // each shelf has left are corrected here rather than going stale.
+    document.addEventListener(FILM_REMOVED_EVENT, (event) => {
+      const { shelfId, filmId } = (event as CustomEvent<FilmRemovedDetail>).detail;
+      shelved.delete(filmId);
+      const slot = slots.find((candidate) => candidate.id === shelfId);
+      if (slot) slot.filmCount -= 1;
+      if (!list.hidden && results.length > 0) paint();
+    });
 
     input.addEventListener('input', () => {
       window.clearTimeout(timer);

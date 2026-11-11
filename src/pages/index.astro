@@ -1,13 +1,14 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Bookcase from '../components/Bookcase.astro';
 import Header from '../components/Header.astro';
-import { HOME_PAGE_TITLE, LOGIN_PATH, SHELVES_LOAD_FAILED } from '../constants';
+import { HOME_PAGE_TITLE, LOGIN_PATH, SHELF_EMPTY_HINT, SHELVES_LOAD_FAILED } from '../constants';
 import { getOwnProfile } from '../lib/profiles';
 import {
-  listOwnShelves,
-  listShelvedFilmIds,
+  listShelvesWithFilms,
+  shelvedFilmIds,
   toShelfSlots,
-  type ShelfSummary,
+  type ShelfWithFilms,
 } from '../lib/shelves';
 
 export const prerender = false;
@@ -18,23 +19,20 @@ if (!user) return Astro.redirect(LOGIN_PATH);
 const userId = user.sub as string;
 const email = user.email as string;
 
-let shelves: ShelfSummary[] = [];
+let shelves: ShelfWithFilms[] = [];
 let displayName = email;
-let shelvedIds: number[] = [];
+let handle: string | null = null;
 let loadError: string | null = null;
 try {
   const [profile, ownShelves] = await Promise.all([
     getOwnProfile(supabase, userId),
-    listOwnShelves(supabase, userId),
+    listShelvesWithFilms(supabase, userId),
   ]);
   // The sign-up trigger seeds a profile, so a missing one means something went
   // wrong at registration — the email is a usable name until settings exists.
   displayName = profile?.display_name ?? email;
+  handle = profile?.handle ?? null;
   shelves = ownShelves;
-  shelvedIds = await listShelvedFilmIds(
-    supabase,
-    shelves.map((shelf) => shelf.id),
-  );
 } catch (err) {
   loadError = SHELVES_LOAD_FAILED;
   console.error('[index] dashboard query failed', err);
@@ -45,13 +43,16 @@ try {
   <Header
     slot="header"
     displayName={displayName}
-    shelvedIds={shelvedIds}
+    handle={handle}
+    shelvedIds={shelvedFilmIds(shelves)}
     shelves={toShelfSlots(shelves)}
   />
 
-  {loadError && <p role="alert">{loadError}</p>}
-
-  <ul>
-    {shelves.map((shelf) => <li>{shelf.name}</li>)}
-  </ul>
+  {
+    loadError ? (
+      <p role="alert">{loadError}</p>
+    ) : (
+      <Bookcase shelves={shelves} editable emptyHint={SHELF_EMPTY_HINT} />
+    )
+  }
 </Layout>
