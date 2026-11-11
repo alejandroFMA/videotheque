@@ -236,16 +236,24 @@ if (Astro.locals.user) return Astro.redirect(HOME_PATH);
     AUTH_EMAIL_TOKEN,
     AUTH_LINK_EXPIRED,
     AUTH_NO_ACCOUNT,
+    AUTH_RATE_LIMITED,
     AUTH_SEND_FAILED,
     AUTH_SENDING,
     AUTH_SENT,
     AUTH_SUBMIT_SIGN_IN,
     AUTH_SUBMIT_SIGN_UP,
     CONFIRM_PATH,
+    SUPABASE_EMAIL_RATE_LIMIT,
     SUPABASE_OTP_DISABLED,
   } from '../constants';
 
   const SIGN_UP = 'signup';
+
+  const failureMessage = (code: string | undefined, signingUp: boolean): string => {
+    if (code === SUPABASE_EMAIL_RATE_LIMIT) return AUTH_RATE_LIMITED;
+    if (!signingUp && code === SUPABASE_OTP_DISABLED) return AUTH_NO_ACCOUNT;
+    return AUTH_SEND_FAILED;
+  };
 
   const form = document.querySelector<HTMLFormElement>('#login-form');
   const status = document.querySelector<HTMLParagraphElement>('#login-status');
@@ -290,8 +298,7 @@ if (Astro.locals.user) return Astro.redirect(HOME_PATH);
 
         if (error) {
           console.error('[login] signInWithOtp failed', error);
-          status.textContent =
-            !signingUp && error.code === SUPABASE_OTP_DISABLED ? AUTH_NO_ACCOUNT : AUTH_SEND_FAILED;
+          status.textContent = failureMessage(error.code, signingUp);
           submit.disabled = false;
           return;
         }
