@@ -17,8 +17,7 @@ const { editable } = Astro.props;
   <div class="case">
     <div class="box">
       <span class="box-spine" aria-hidden="true"><span id="case-spine-title"></span></span>
-      <img id="case-cover" alt="" width="300" height="450" />
-      <span id="case-blank" class="blank" aria-hidden="true" hidden></span>
+      <span class="front"><img id="case-cover" alt="" width="300" height="450" /></span>
     </div>
 
     <div class="record">
@@ -113,14 +112,30 @@ const { editable } = Astro.props;
     text-transform: uppercase;
   }
 
-  #case-cover,
-  .blank {
+  /* The case front is the spine colour until the poster arrives, and stays
+     that way for a film with no poster. */
+  .front {
     display: block;
     width: 300px;
     height: 450px;
+    overflow: hidden;
     border-radius: 0 3px 3px 0;
-    object-fit: cover;
     background: var(--spine, #2a2a2a);
+  }
+
+  /* The transition sits on the loaded state only, so the previous film's
+     poster disappears at once and only the new one fades in. */
+  #case-cover {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+  }
+
+  #case-cover.loaded {
+    opacity: 1;
+    transition: opacity 180ms ease;
   }
 
   [hidden] {
@@ -222,8 +237,7 @@ const { editable } = Astro.props;
       font-size: 12.5px;
     }
 
-    #case-cover,
-    .blank {
+    .front {
       width: 188px;
       height: 282px;
     }
@@ -252,6 +266,10 @@ const { editable } = Astro.props;
     dialog[open],
     .case {
       animation: none;
+    }
+
+    #case-cover.loaded {
+      transition: none;
     }
   }
 </style>
