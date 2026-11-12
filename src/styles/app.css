@@ -19,6 +19,7 @@
   --track: rgba(20, 20, 20, 0.07);
   --thumb: #ffffff;
   --brass: #b8905a;
+  --success: #2f7d4f;
   /* The walnut texture is one image; these light it for the theme. */
   --wood-dim: rgba(0, 0, 0, 0.04);
   --wall-shadow: rgba(0, 0, 0, 0.2);
@@ -35,6 +36,7 @@
     --track: rgba(255, 255, 255, 0.07);
     --thumb: #4a4a48;
     --brass: #c19a63;
+    --success: #5cbf86;
     --wood-dim: rgba(0, 0, 0, 0.14);
     --wall-shadow: rgba(0, 0, 0, 0.5);
   }
@@ -50,6 +52,7 @@
   --track: rgba(255, 255, 255, 0.07);
   --thumb: #4a4a48;
   --brass: #c19a63;
+  --success: #5cbf86;
   --wood-dim: rgba(0, 0, 0, 0.14);
   --wall-shadow: rgba(0, 0, 0, 0.5);
 }
