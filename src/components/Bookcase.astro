@@ -169,11 +169,22 @@ const allFull =
       0 14px 22px rgba(0, 0, 0, 0.45);
   }
 
+  /* The shelf the carried spine lands on if let go now. On a phone a shelf
+     wraps into rows, and without this a row of the next shelf reads as more
+     of the same one. */
+  .bookcase :global(.shelf.targeted .plank) {
+    outline: 2px solid var(--ink);
+    outline-offset: 6px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--shelf-accent, var(--muted)) 22%, transparent);
+  }
+
   /* A full shelf a spine cannot be dropped on. */
   .bookcase :global(.shelf.refusing .plank) {
     outline: 2px solid var(--danger);
     outline-offset: 6px;
     border-radius: 4px;
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
   }
 
   .bookcase :global(.shelf.refusing .slot) {
@@ -462,6 +473,7 @@ const allFull =
       grabX: number;
       grabY: number;
       refusing: HTMLElement | null;
+      target: HTMLElement | null;
     }
 
     interface ShelfDrag extends PressBase {
@@ -483,6 +495,16 @@ const allFull =
       shelf?.classList.add('refusing');
       current.refusing = shelf;
       root.classList.toggle('drag-refused', shelf !== null);
+    };
+
+    // Follows the gap, not the pointer: off every shelf the spine still lands
+    // where its gap is. Over a full shelf it is that shelf, marked as refusing.
+    const markTarget = (current: SpineDrag) => {
+      const shelf = current.refusing ?? shelfOf(current.slot);
+      if (current.target === shelf) return;
+      current.target?.classList.remove('targeted');
+      shelf?.classList.add('targeted');
+      current.target = shelf;
     };
 
     const placeGhost = (current: SpineDrag, x: number, y: number) => {
@@ -516,6 +538,7 @@ const allFull =
       document.body.append(ghost);
       current.ghost = ghost;
       current.slot.classList.add('placeholder');
+      markTarget(current);
       placeGhost(current, current.startX, current.startY);
     };
 
@@ -539,8 +562,7 @@ const allFull =
       );
     };
 
-    const moveSpine = (current: SpineDrag, x: number, y: number) => {
-      placeGhost(current, x, y);
+    const placeSlot = (current: SpineDrag, x: number, y: number) => {
       const under = document.elementFromPoint(x, y);
       const plank = plankUnder(under);
       if (!plank) return setRefusing(current, null);
@@ -569,6 +591,12 @@ const allFull =
       } else if (!over && current.slot.parentElement !== plank) {
         plank.append(current.slot);
       }
+    };
+
+    const moveSpine = (current: SpineDrag, x: number, y: number) => {
+      placeGhost(current, x, y);
+      placeSlot(current, x, y);
+      markTarget(current);
     };
 
     const moveShelf = (current: ShelfDrag, y: number) => {
@@ -622,6 +650,7 @@ const allFull =
       }
 
       current.ghost?.remove();
+      current.target?.classList.remove('targeted');
       current.slot.classList.remove('placeholder');
       // Let go over a full shelf: the spine goes home, not to the last shelf
       // it passed on the way.
@@ -672,6 +701,7 @@ const allFull =
             grabX: 0,
             grabY: 0,
             refusing: null,
+            target: null,
           };
         } else {
           return;

@@ -23,6 +23,7 @@ const label = colour ? shelf.name : null;
 
 <article
   class="shelf"
+  style={colour ? `--shelf-accent:${colour}` : undefined}
   data-shelf-id={shelf.id}
   data-label-name={label}
   data-label-color={colour}
@@ -93,7 +94,8 @@ const label = colour ? shelf.name : null;
     display: flex;
     flex-wrap: nowrap;
     align-content: flex-start;
-    column-gap: 3px;
+    --spine-gap: 3px;
+    column-gap: var(--spine-gap);
     row-gap: calc(var(--period) - var(--spine-h));
     width: 756px;
     min-height: var(--row);
@@ -270,9 +272,17 @@ const label = colour ? shelf.name : null;
     }
   }
 
+  /* A phone draws a full shelf in two rows of ten, so the whole shelf and its
+     postit fit on screen while a spine is carried across it. The spines take
+     their width from the screen instead of the other way round. */
   @media (max-width: 499px) {
+    .shelf {
+      width: 100%;
+    }
+
     .plank {
-      width: 260px;
+      --per-row: 10;
+      width: 100%;
     }
   }
 </style>

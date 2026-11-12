@@ -118,9 +118,11 @@ const { film } = Astro.props;
     }
   }
 
+  /* --per-row is the plank's. The 1px keeps sub-pixel rounding from pushing
+     the last spine of a row onto the next one. */
   @media (max-width: 499px) {
     .slot {
-      flex: 0 0 44px;
+      flex: 0 0 calc((100% - (var(--per-row) - 1) * var(--spine-gap) - 1px) / var(--per-row));
     }
   }
 
