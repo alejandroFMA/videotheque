@@ -1,15 +1,17 @@
 ---
 import Spine from './Spine.astro';
-import { LABEL_ADD, LABEL_EDIT } from '../constants';
+import { LABEL_ADD, LABEL_EDIT, SHELF_DELETE } from '../constants';
 import { parsePostitColor, postitInk } from '../lib/postit';
 import { filmsInOrder, type ShelfWithFilms } from '../lib/shelves';
 
 interface Props {
   shelf: ShelfWithFilms;
   editable: boolean;
+  /** False on the owner's last shelf: a bookcase with none has nowhere to add. */
+  deletable: boolean;
 }
 
-const { shelf, editable } = Astro.props;
+const { shelf, editable, deletable } = Astro.props;
 
 // The endpoint validates the colour, but RLS also lets an owner update the row
 // directly, and this value is written into a style attribute.
@@ -52,10 +54,22 @@ const label = colour ? shelf.name : null;
   <ol class="plank">
     {filmsInOrder(shelf).map((film) => <Spine film={film} />)}
   </ol>
+
+  {
+    editable && deletable && (
+      <button type="button" class="shelf-delete" data-delete-shelf aria-label={SHELF_DELETE}>
+        <span aria-hidden="true">−</span>
+      </button>
+    )
+  }
 </article>
 
 <style>
   .shelf {
+    /* On the shelf rather than the plank so the delete button can centre on
+       the board too. */
+    --board: 22px;
+
     position: relative;
     width: fit-content;
     margin: 64px auto 0;
@@ -67,7 +81,6 @@ const label = colour ? shelf.name : null;
      row count is the browser's to decide and no element exists per row. */
   .plank {
     --spine-h: 172px;
-    --board: 22px;
     /* How far the spines stand in from the board's back edge. */
     --sink: 7px;
     --lip: 9px;
@@ -165,6 +178,10 @@ const label = colour ? shelf.name : null;
 
   button.postit {
     cursor: pointer;
+    /* A long press lifts the shelf; the system menu must not open over it. */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 
   /* The pin. */
@@ -204,9 +221,37 @@ const label = colour ? shelf.name : null;
     color: var(--ink);
   }
 
+  .shelf-delete {
+    --size: 20px;
+
+    position: absolute;
+    right: -34px;
+    /* Centred on the last row's board, which is the plank's bottom edge. */
+    bottom: calc(var(--board) / 2 - var(--size) / 2);
+    display: grid;
+    place-items: center;
+    width: var(--size);
+    height: var(--size);
+    padding: 0;
+    background: none;
+    border: 1.5px solid var(--danger);
+    border-radius: 50%;
+    color: var(--danger);
+    font: 600 15px/1 var(--font-ui);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  .shelf:hover .shelf-delete,
+  .shelf-delete:focus-visible {
+    opacity: 1;
+  }
+
   /* No hover to reveal it on a touch screen. */
   @media (hover: none) {
-    .label-add {
+    .label-add,
+    .shelf-delete {
       opacity: 1;
     }
   }
@@ -215,6 +260,13 @@ const label = colour ? shelf.name : null;
     .plank {
       flex-wrap: wrap;
       width: 455px;
+    }
+
+    /* Beside the board there is no room left in the viewport at these
+       widths; under it, at the right end, it stays with its shelf. */
+    .shelf-delete {
+      right: 0;
+      bottom: -34px;
     }
   }
 

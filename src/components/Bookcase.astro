@@ -1,4 +1,5 @@
 ---
+import DeleteShelfDialog from './DeleteShelfDialog.astro';
 import FilmCase from './FilmCase.astro';
 import LabelEditor from './LabelEditor.astro';
 import Shelf from './Shelf.astro';
@@ -21,7 +22,11 @@ const allFull =
 ---
 
 <section id="bookcase" class="bookcase" data-editable={editable ? '' : undefined}>
-  {shelves.map((shelf) => <Shelf shelf={shelf} editable={editable} />)}
+  {
+    shelves.map((shelf) => (
+      <Shelf shelf={shelf} editable={editable} deletable={shelves.length > 1} />
+    ))
+  }
 
   <p id="empty-hint" class="hint" hidden={filmCount > 0}>{emptyHint}</p>
 
@@ -37,6 +42,8 @@ const allFull =
 <FilmCase editable={editable} />
 
 {editable && <LabelEditor />}
+
+{editable && <DeleteShelfDialog />}
 
 {
   /* The blank a film added from search is drawn from, so the spine markup
@@ -137,10 +144,58 @@ const allFull =
   #shelf-toast:empty {
     display: none;
   }
+
+  /* Only the owner's spines and postits can be picked up. */
+  .bookcase[data-editable] :global(.spine),
+  .bookcase[data-editable] :global(button.postit) {
+    cursor: grab;
+  }
+
+  :global(html.drag-active),
+  :global(html.drag-active *) {
+    cursor: grabbing !important;
+  }
+
+  :global(html.drag-refused),
+  :global(html.drag-refused *) {
+    cursor: not-allowed !important;
+  }
+
+  /* The spine being carried. Placed and sized inline by the script; this is
+     only how it looks. */
+  :global(li.drag-ghost .spine) {
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 0, 0, 0.16),
+      0 14px 22px rgba(0, 0, 0, 0.45);
+  }
+
+  /* A full shelf a spine cannot be dropped on. */
+  .bookcase :global(.shelf.refusing .plank) {
+    outline: 2px solid var(--danger);
+    outline-offset: 6px;
+    border-radius: 4px;
+  }
+
+  .bookcase :global(.shelf.refusing .slot) {
+    filter: saturate(0.6);
+  }
+
+  .bookcase :global(.shelf.lifted) {
+    z-index: 5;
+    transform: translateY(-6px);
+    filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.35));
+  }
 </style>
 
 <script>
-  import { createShelf, removeFilmFromShelf, saveShelfOrder } from '../lib/shelf-api';
+  import {
+    createShelf,
+    moveFilmToShelf,
+    removeFilmFromShelf,
+    saveShelfOrder,
+    saveShelvesOrder,
+  } from '../lib/shelf-api';
+  import { canDropOn, edgeScrollStep, movedFarEnough } from '../lib/shelf-rules';
   import { posterUrl } from '../lib/tmdb-mapping';
   import { safeSpineColor, spineWidth } from '../lib/spine';
   import {
@@ -148,17 +203,34 @@ const allFull =
     CASE_NO_OVERVIEW,
     CASE_REMOVE_FAILED,
     FILM_ADDED_EVENT,
+    FILM_MOVED_EVENT,
     FILM_REMOVED_EVENT,
+    MOVE_FAILED,
+    MOVE_TARGET_FULL,
     REORDER_FAILED,
     SHELF_CAPACITY,
+    SHELVES_REORDERED_EVENT,
+    SHELVES_REORDER_FAILED,
   } from '../constants';
-  import type { FilmAddedDetail, FilmRemovedDetail } from '../types';
+  import type {
+    FilmAddedDetail,
+    FilmMovedDetail,
+    FilmRemovedDetail,
+    ShelvesReorderedDetail,
+  } from '../types';
 
   const TOAST_MS = 4000;
-  // Below this a press is a click that opens the case, not the start of a drag.
-  const DRAG_THRESHOLD_PX = 6;
   const COVER_SIZE = 'w500';
   const HALF = 0.5;
+  // A finger held this long lifts a spine or a shelf; moving further than the
+  // slop before then means the finger is scrolling instead.
+  const LONG_PRESS_MS = 350;
+  // Under the browser's own pan threshold, so the page has not started
+  // scrolling by the time the spine lifts.
+  const LONG_PRESS_SLOP_PX = 6;
+  const HAPTIC_MS = 12;
+  const GHOST_Z_INDEX = '40';
+  const GHOST_TRANSFORM = 'rotate(-6deg) scale(1.06)';
 
   const bookcase = document.querySelector<HTMLElement>('#bookcase');
   const dialog = document.querySelector<HTMLDialogElement>('#film-case');
@@ -293,10 +365,16 @@ const allFull =
       say(ADD_SHELF_FAILED);
     });
 
-    // ---- reordering ---------------------------------------------------------
+    // ---- dragging: spines within and across shelves, shelves by their postit
+
+    const filmIdOf = (slot: HTMLElement) => Number(slot.dataset.filmId);
+    const shelfOf = (element: Element) => element.closest<HTMLElement>('[data-shelf-id]');
+    const shelfIdOf = (element: Element) => shelfOf(element)?.dataset.shelfId;
+    const shelvesInOrder = () => [...bookcase.querySelectorAll<HTMLElement>('.shelf')];
+    const shelfOrder = () => shelvesInOrder().map((shelf) => shelf.dataset.shelfId ?? '');
 
     const restore = (plank: Element, order: number[]) => {
-      const byId = new Map(slotsOf(plank).map((slot) => [Number(slot.dataset.filmId), slot]));
+      const byId = new Map(slotsOf(plank).map((slot) => [filmIdOf(slot), slot]));
       order.forEach((id) => {
         const slot = byId.get(id);
         if (slot) plank.append(slot);
@@ -306,77 +384,319 @@ const allFull =
     const persist = async (plank: Element, before: number[]) => {
       const after = orderOf(plank);
       if (after.join() === before.join()) return;
-      const shelfId = plank.closest<HTMLElement>('[data-shelf-id]')?.dataset.shelfId;
+      const shelfId = shelfIdOf(plank);
       if (shelfId && (await saveShelfOrder(shelfId, after))) return;
       restore(plank, before);
       say(REORDER_FAILED);
     };
 
-    interface Drag {
-      slot: HTMLElement;
-      plank: HTMLElement;
+    /** The slot is already drawn on its new plank; this saves it or puts it back. */
+    const persistMove = async (slot: HTMLElement, origin: HTMLElement, originOrder: number[]) => {
+      const target = slot.closest<HTMLElement>('.plank');
+      const fromShelfId = shelfIdOf(origin);
+      const toShelfId = target ? shelfIdOf(target) : undefined;
+      const filmId = filmIdOf(slot);
+      const moved =
+        target &&
+        fromShelfId &&
+        toShelfId &&
+        (await moveFilmToShelf(toShelfId, { filmId, fromShelfId, order: orderOf(target) }));
+
+      if (moved) {
+        refresh();
+        document.dispatchEvent(
+          new CustomEvent<FilmMovedDetail>(FILM_MOVED_EVENT, {
+            detail: { filmId, fromShelfId, toShelfId },
+          }),
+        );
+        return;
+      }
+      origin.append(slot);
+      restore(origin, originOrder);
+      refresh();
+      say(MOVE_FAILED);
+    };
+
+    const restoreShelves = (order: string[]) => {
+      const byId = new Map(shelvesInOrder().map((shelf) => [shelf.dataset.shelfId, shelf]));
+      // Every shelf is drawn before the hint, so it is a fixed point to rebuild against.
+      order.forEach((id) => {
+        const shelf = byId.get(id);
+        if (shelf) emptyHint?.before(shelf);
+      });
+    };
+
+    const persistShelves = async (before: string[]) => {
+      const after = shelfOrder();
+      if (after.join() === before.join()) return;
+      if (await saveShelvesOrder(after)) {
+        document.dispatchEvent(
+          new CustomEvent<ShelvesReorderedDetail>(SHELVES_REORDERED_EVENT, {
+            detail: { order: after },
+          }),
+        );
+        return;
+      }
+      restoreShelves(before);
+      say(SHELVES_REORDER_FAILED);
+    };
+
+    interface PressBase {
       pointerId: number;
+      pointerType: string;
       startX: number;
       startY: number;
-      before: number[];
-      moving: boolean;
+      lastX: number;
+      lastY: number;
+      scrollFrame: number | undefined;
+      lifted: boolean;
+      pressTimer: number | undefined;
     }
 
-    let drag: Drag | null = null;
+    interface SpineDrag extends PressBase {
+      kind: 'spine';
+      slot: HTMLElement;
+      origin: HTMLElement;
+      originOrder: number[];
+      ghost: HTMLElement | null;
+      grabX: number;
+      grabY: number;
+      refusing: HTMLElement | null;
+    }
+
+    interface ShelfDrag extends PressBase {
+      kind: 'shelf';
+      shelf: HTMLElement;
+      before: string[];
+    }
+
+    let drag: SpineDrag | ShelfDrag | null = null;
     // A drag ends with a click on whatever is under the pointer; that click
-    // must not open the case.
+    // must not open the case or the label editor.
     let swallowClick = false;
+
+    const root = document.documentElement;
+
+    const setRefusing = (current: SpineDrag, shelf: HTMLElement | null) => {
+      if (current.refusing === shelf) return;
+      current.refusing?.classList.remove('refusing');
+      shelf?.classList.add('refusing');
+      current.refusing = shelf;
+      root.classList.toggle('drag-refused', shelf !== null);
+    };
+
+    const placeGhost = (current: SpineDrag, x: number, y: number) => {
+      if (!current.ghost) return;
+      const zoom = Number(getComputedStyle(bookcase).zoom) || 1;
+      // The ghost carries the bookcase's zoom, which also scales its offsets.
+      current.ghost.style.left = `${(x - current.grabX) / zoom}px`;
+      current.ghost.style.top = `${(y - current.grabY) / zoom}px`;
+    };
+
+    const liftSpine = (current: SpineDrag) => {
+      const rect = current.slot.getBoundingClientRect();
+      const zoom = Number(getComputedStyle(bookcase).zoom) || 1;
+      const ghost = current.slot.cloneNode(true) as HTMLElement;
+      ghost.classList.add('drag-ghost');
+      ghost.removeAttribute('data-film-id');
+      ghost.setAttribute('aria-hidden', 'true');
+      Object.assign(ghost.style, {
+        position: 'fixed',
+        zIndex: GHOST_Z_INDEX,
+        margin: '0',
+        width: `${rect.width / zoom}px`,
+        height: `${rect.height / zoom}px`,
+        zoom: String(zoom),
+        pointerEvents: 'none',
+        transform: GHOST_TRANSFORM,
+        listStyle: 'none',
+      });
+      current.grabX = current.startX - rect.left;
+      current.grabY = current.startY - rect.top;
+      document.body.append(ghost);
+      current.ghost = ghost;
+      current.slot.classList.add('placeholder');
+      placeGhost(current, current.startX, current.startY);
+    };
+
+    const lift = () => {
+      if (!drag || drag.lifted) return;
+      drag.lifted = true;
+      window.clearTimeout(drag.pressTimer);
+      root.classList.add('drag-active');
+      if (drag.pointerType === 'touch') navigator.vibrate?.(HAPTIC_MS);
+      if (drag.kind === 'spine') liftSpine(drag);
+      else drag.shelf.classList.add('lifted');
+      drag.scrollFrame = window.requestAnimationFrame(autoScroll);
+    };
+
+    const plankUnder = (element: Element | null) => {
+      if (!element || !bookcase.contains(element)) return null;
+      return (
+        element.closest<HTMLElement>('.plank') ??
+        element.closest<HTMLElement>('.shelf')?.querySelector<HTMLElement>('.plank') ??
+        null
+      );
+    };
+
+    const moveSpine = (current: SpineDrag, x: number, y: number) => {
+      placeGhost(current, x, y);
+      const under = document.elementFromPoint(x, y);
+      const plank = plankUnder(under);
+      if (!plank) return setRefusing(current, null);
+
+      // The placeholder is the dragged film itself: it never counts against room.
+      const filmCount = slotsOf(plank).filter((slot) => slot !== current.slot).length;
+      if (!canDropOn(filmCount, plank === current.origin)) {
+        // Let go now and the spine goes home, so that is where the gap shows,
+        // not wherever the pointer last left it on the way here.
+        const shelf = shelfOf(plank);
+        if (current.refusing !== shelf) {
+          current.origin.append(current.slot);
+          restore(current.origin, current.originOrder);
+        }
+        return setRefusing(current, shelf);
+      }
+      setRefusing(current, null);
+
+      // Reading the element under the pointer, rather than comparing offsets,
+      // is what keeps this right when a narrow screen wraps a shelf into rows.
+      const over = under?.closest<HTMLElement>('.slot');
+      if (over && over !== current.slot && over.parentElement === plank) {
+        const rect = over.getBoundingClientRect();
+        const pastMiddle = x > rect.left + rect.width * HALF;
+        plank.insertBefore(current.slot, pastMiddle ? over.nextSibling : over);
+      } else if (!over && current.slot.parentElement !== plank) {
+        plank.append(current.slot);
+      }
+    };
+
+    const moveShelf = (current: ShelfDrag, y: number) => {
+      const others = shelvesInOrder().filter((shelf) => shelf !== current.shelf);
+      const below = others.find((shelf) => {
+        const rect = shelf.getBoundingClientRect();
+        return y < rect.top + rect.height * HALF;
+      });
+      if (below) {
+        if (current.shelf.nextElementSibling !== below) below.before(current.shelf);
+      } else {
+        const last = others.at(-1);
+        if (last && last.nextElementSibling !== current.shelf) last.after(current.shelf);
+      }
+    };
+
+    const carry = (current: SpineDrag | ShelfDrag) => {
+      if (current.kind === 'spine') moveSpine(current, current.lastX, current.lastY);
+      else moveShelf(current, current.lastY);
+    };
+
+    // Runs every frame while something is carried, so holding still at an
+    // edge keeps the page moving and the drop point follows it.
+    const autoScroll = () => {
+      if (!drag?.lifted) return;
+      const step = edgeScrollStep(drag.lastY, window.innerHeight);
+      if (step !== 0) {
+        window.scrollBy(0, step);
+        carry(drag);
+      }
+      drag.scrollFrame = window.requestAnimationFrame(autoScroll);
+    };
 
     const endDrag = (commit: boolean) => {
       if (!drag) return;
-      const { slot, plank, before, moving } = drag;
+      const current = drag;
       drag = null;
-      if (!moving) return;
+      window.clearTimeout(current.pressTimer);
+      if (current.scrollFrame !== undefined) window.cancelAnimationFrame(current.scrollFrame);
+      if (!current.lifted) return;
 
-      slot.classList.remove('dragging');
+      root.classList.remove('drag-active', 'drag-refused');
       swallowClick = true;
       window.setTimeout(() => (swallowClick = false), 0);
-      if (commit) persist(plank, before);
-      else restore(plank, before);
+
+      if (current.kind === 'shelf') {
+        current.shelf.classList.remove('lifted');
+        if (commit) persistShelves(current.before);
+        else restoreShelves(current.before);
+        return;
+      }
+
+      current.ghost?.remove();
+      current.slot.classList.remove('placeholder');
+      // Let go over a full shelf: the spine goes home, not to the last shelf
+      // it passed on the way.
+      const refused = current.refusing !== null;
+      setRefusing(current, null);
+      const plank = current.slot.closest<HTMLElement>('.plank');
+      if (!commit || refused || !plank) {
+        current.origin.append(current.slot);
+        restore(current.origin, current.originOrder);
+      } else if (plank === current.origin) {
+        persist(plank, current.originOrder);
+      } else {
+        persistMove(current.slot, current.origin, current.originOrder);
+      }
     };
 
     if (editable) {
       bookcase.addEventListener('pointerdown', (event) => {
-        if (event.button !== 0) return;
-        const slot = (event.target as HTMLElement).closest<HTMLElement>('.slot');
-        const plank = slot?.closest<HTMLElement>('.plank');
-        if (!slot || !plank) return;
-        drag = {
-          slot,
-          plank,
+        if (event.button !== 0 || drag) return;
+        const target = event.target as HTMLElement;
+        const base: PressBase = {
           pointerId: event.pointerId,
+          pointerType: event.pointerType,
           startX: event.clientX,
           startY: event.clientY,
-          before: orderOf(plank),
-          moving: false,
+          lastX: event.clientX,
+          lastY: event.clientY,
+          scrollFrame: undefined,
+          lifted: false,
+          pressTimer: undefined,
         };
+
+        const postit = target.closest<HTMLElement>('button.postit');
+        const slot = target.closest<HTMLElement>('.slot');
+        const plank = slot?.closest<HTMLElement>('.plank');
+        const shelf = postit ? shelfOf(postit) : null;
+
+        if (postit && shelf) {
+          drag = { ...base, kind: 'shelf', shelf, before: shelfOrder() };
+        } else if (slot && plank) {
+          drag = {
+            ...base,
+            kind: 'spine',
+            slot,
+            origin: plank,
+            originOrder: orderOf(plank),
+            ghost: null,
+            grabX: 0,
+            grabY: 0,
+            refusing: null,
+          };
+        } else {
+          return;
+        }
+
+        // A finger has to hold still first: without the pause, the same
+        // movement is the page scrolling.
+        if (event.pointerType === 'touch') drag.pressTimer = window.setTimeout(lift, LONG_PRESS_MS);
       });
 
       document.addEventListener('pointermove', (event) => {
         if (!drag || event.pointerId !== drag.pointerId) return;
-        if (!drag.moving) {
-          const travelled = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-          if (travelled < DRAG_THRESHOLD_PX) return;
-          drag.moving = true;
-          drag.slot.classList.add('dragging');
+        if (!drag.lifted) {
+          const dx = event.clientX - drag.startX;
+          const dy = event.clientY - drag.startY;
+          if (drag.pointerType === 'touch') {
+            if (Math.hypot(dx, dy) > LONG_PRESS_SLOP_PX) endDrag(false);
+            return;
+          }
+          if (!movedFarEnough(drag.kind, dx, dy)) return;
+          lift();
         }
-
-        // The lifted spine steps through the row as the pointer crosses its
-        // neighbours. Reading the element under the pointer, rather than
-        // comparing x offsets, is what keeps this right when a narrow screen
-        // wraps one shelf into several planks.
-        const over = document
-          .elementFromPoint(event.clientX, event.clientY)
-          ?.closest<HTMLElement>('.slot');
-        if (!over || over === drag.slot || over.parentElement !== drag.plank) return;
-        const rect = over.getBoundingClientRect();
-        const pastMiddle = event.clientX > rect.left + rect.width * HALF;
-        drag.plank.insertBefore(drag.slot, pastMiddle ? over.nextSibling : over);
+        drag.lastX = event.clientX;
+        drag.lastY = event.clientY;
+        carry(drag);
       });
 
       document.addEventListener('pointerup', (event) => {
@@ -388,26 +708,89 @@ const allFull =
         if (drag && event.pointerId === drag.pointerId) endDrag(false);
       });
 
-      // The same move without a pointer.
+      // Once lifted, a finger moving down must carry the spine, not scroll
+      // the page. Non-passive, or preventDefault is ignored.
+      document.addEventListener(
+        'touchmove',
+        (event) => {
+          if (drag?.lifted) event.preventDefault();
+        },
+        { passive: false },
+      );
+
+      // A long press would otherwise open the system's menu over the spine.
+      bookcase.addEventListener('contextmenu', (event) => {
+        if (drag?.pointerType === 'touch') event.preventDefault();
+      });
+
+      // The same moves without a pointer: Alt+Left/Right within a shelf,
+      // Alt+Up/Down to the neighbouring shelf, for a spine or a postit.
       bookcase.addEventListener('keydown', (event) => {
-        if (!event.altKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
-        const slot = (event.target as HTMLElement).closest<HTMLElement>('.slot');
+        if (!event.altKey) return;
+        const target = event.target as HTMLElement;
+        const vertical = event.key === 'ArrowUp' || event.key === 'ArrowDown';
+        const horizontal = event.key === 'ArrowLeft' || event.key === 'ArrowRight';
+        if (!vertical && !horizontal) return;
+
+        const postit = target.closest<HTMLElement>('button.postit');
+        if (postit && vertical) {
+          event.preventDefault();
+          const shelf = shelfOf(postit);
+          if (!shelf) return;
+          const before = shelfOrder();
+          const shelves = shelvesInOrder();
+          const neighbour = shelves[shelves.indexOf(shelf) + (event.key === 'ArrowUp' ? -1 : 1)];
+          if (!neighbour) return;
+          if (event.key === 'ArrowUp') neighbour.before(shelf);
+          else neighbour.after(shelf);
+          postit.focus();
+          persistShelves(before);
+          return;
+        }
+
+        const slot = target.closest<HTMLElement>('.slot');
         const plank = slot?.closest<HTMLElement>('.plank');
         if (!slot || !plank) return;
-
         event.preventDefault();
         const before = orderOf(plank);
-        const neighbour =
-          event.key === 'ArrowLeft' ? slot.previousElementSibling : slot.nextElementSibling;
-        if (!neighbour) return;
-        plank.insertBefore(slot, event.key === 'ArrowLeft' ? neighbour : neighbour.nextSibling);
+
+        if (horizontal) {
+          const neighbour =
+            event.key === 'ArrowLeft' ? slot.previousElementSibling : slot.nextElementSibling;
+          if (!neighbour) return;
+          plank.insertBefore(slot, event.key === 'ArrowLeft' ? neighbour : neighbour.nextSibling);
+          slot.querySelector<HTMLElement>('.spine')?.focus();
+          persist(plank, before);
+          return;
+        }
+
+        const shelves = shelvesInOrder();
+        const current = shelfOf(plank);
+        const neighbour = current
+          ? shelves[shelves.indexOf(current) + (event.key === 'ArrowUp' ? -1 : 1)]
+          : undefined;
+        const targetPlank = neighbour?.querySelector<HTMLElement>('.plank');
+        if (!targetPlank) return;
+        if (!canDropOn(slotsOf(targetPlank).length, false)) return say(MOVE_TARGET_FULL);
+        targetPlank.append(slot);
         slot.querySelector<HTMLElement>('.spine')?.focus();
-        persist(plank, before);
+        persistMove(slot, plank, before);
       });
     }
 
+    // Capture on document, ahead of every other click listener — the label
+    // editor's included — so the click that ends a drag reaches none of them.
+    document.addEventListener(
+      'click',
+      (event) => {
+        if (!swallowClick) return;
+        event.stopPropagation();
+        event.preventDefault();
+      },
+      { capture: true },
+    );
+
     bookcase.addEventListener('click', (event) => {
-      if (swallowClick) return;
       const slot = (event.target as HTMLElement).closest<HTMLElement>('.slot');
       if (slot) openCase(slot);
     });

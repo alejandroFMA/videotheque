@@ -4,8 +4,11 @@ import { fakeSupabase } from './helpers/fake-supabase';
 import {
   handleAddFilm,
   handleCreateShelf,
+  handleDeleteShelf,
+  handleMoveFilm,
   handleRemoveFilm,
   handleReorderShelf,
+  handleReorderShelves,
   handleUpdateShelf,
   readJson,
 } from '../src/lib/shelf-actions';
@@ -13,6 +16,7 @@ import { LABEL_MAX_LENGTH, SHELF_CAPACITY, SHELF_FULL_MESSAGE } from '../src/con
 
 const SHELF = '11111111-2222-3333-4444-555555555555';
 const OWNER = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const OTHER_SHELF = '99999999-8888-7777-6666-555555555555';
 
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -619,5 +623,203 @@ describe('handleUpdateShelf', () => {
     expect(res.status).toBe(400);
     // Only the ownership lookup ran.
     expect(sb.tableCalls('shelves')).toBe(1);
+  });
+});
+
+// ---- moving a film between shelves -----------------------------------
+
+const OWN = { data: { id: SHELF, slug: 'abc' }, error: null };
+const OWN_OTHER = { data: { id: OTHER_SHELF, slug: 'def' }, error: null };
+const ON_SOURCE = { data: { film_id: 603 }, error: null };
+const roomFor = (count: number) => ({ data: null, error: null, count });
+
+// `{ owner }` rather than a defaulted parameter: passing undefined to a
+// defaulted parameter would quietly sign the request in.
+function moveRequest(
+  sb: ReturnType<typeof fakeSupabase>,
+  body: unknown,
+  { owner }: { owner: string | undefined } = { owner: OWNER },
+) {
+  return handleMoveFilm({ supabase: sb.client, owner, shelfId: SHELF, body });
+}
+
+const VALID_MOVE = { filmId: 603, fromShelfId: OTHER_SHELF, order: [11, 603] };
+
+describe('handleMoveFilm — guard', () => {
+  it('401 without a session', async () => {
+    const sb = fakeSupabase({ shelves: OWN });
+    const res = await moveRequest(sb, VALID_MOVE, { owner: undefined });
+    expect(res.status).toBe(401);
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+
+  it("404 when the target is not the caller's", async () => {
+    const sb = fakeSupabase({ shelves: { data: null, error: null } });
+    expect((await moveRequest(sb, VALID_MOVE)).status).toBe(404);
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+
+  it("404 when the source is not the caller's", async () => {
+    const sb = fakeSupabase({ shelves: [OWN, { data: null, error: null }] });
+    expect((await moveRequest(sb, VALID_MOVE)).status).toBe(404);
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleMoveFilm — validation', () => {
+  it('400 when the order omits the film', async () => {
+    const sb = fakeSupabase({ shelves: [OWN, OWN_OTHER] });
+    const res = await moveRequest(sb, { ...VALID_MOVE, order: [11, 12] });
+    expect(res.status).toBe(400);
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+
+  it('400 when source and target are the same shelf', async () => {
+    const sb = fakeSupabase({ shelves: OWN });
+    const res = await moveRequest(sb, { ...VALID_MOVE, fromShelfId: SHELF });
+    expect(res.status).toBe(400);
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+
+  it('400 for a non-UUID fromShelfId', async () => {
+    const sb = fakeSupabase({ shelves: OWN });
+    expect((await moveRequest(sb, { ...VALID_MOVE, fromShelfId: 'nope' })).status).toBe(400);
+  });
+
+  it('400 for a missing body', async () => {
+    const sb = fakeSupabase({ shelves: OWN });
+    expect((await moveRequest(sb, null)).status).toBe(400);
+  });
+});
+
+describe('handleMoveFilm — rules', () => {
+  it('404 when the film is not on the source shelf', async () => {
+    const sb = fakeSupabase({
+      shelves: [OWN, OWN_OTHER],
+      shelf_items: [{ data: null, error: null }, roomFor(0)],
+    });
+    expect((await moveRequest(sb, VALID_MOVE)).status).toBe(404);
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+
+  it('409 when the target shelf is full', async () => {
+    const sb = fakeSupabase({
+      shelves: [OWN, OWN_OTHER],
+      shelf_items: [ON_SOURCE, roomFor(SHELF_CAPACITY)],
+    });
+    const res = await moveRequest(sb, VALID_MOVE);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'shelf_full', message: SHELF_FULL_MESSAGE });
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleMoveFilm — happy path', () => {
+  it('204 and one move_film call with the parsed values', async () => {
+    const sb = fakeSupabase({
+      shelves: [OWN, OWN_OTHER],
+      shelf_items: [ON_SOURCE, roomFor(SHELF_CAPACITY - 1)],
+    });
+    const res = await moveRequest(sb, VALID_MOVE);
+    expect(res.status).toBe(204);
+    expect(sb.rpc).toHaveBeenCalledTimes(1);
+    expect(sb.rpc).toHaveBeenCalledWith('move_film', {
+      p_film: 603,
+      p_from: OTHER_SHELF,
+      p_to: SHELF,
+      p_order: [11, 603],
+    });
+  });
+
+  it('500 when the move fails in the database', async () => {
+    const sb = fakeSupabase(
+      { shelves: [OWN, OWN_OTHER], shelf_items: [ON_SOURCE, roomFor(0)] },
+      { move_film: { data: null, error: { message: 'boom' } } },
+    );
+    expect((await moveRequest(sb, VALID_MOVE)).status).toBe(500);
+  });
+});
+
+// ---- deleting a shelf ------------------------------------------------
+
+function deleteRequest(
+  sb: ReturnType<typeof fakeSupabase>,
+  { owner }: { owner: string | undefined } = { owner: OWNER },
+) {
+  return handleDeleteShelf({ supabase: sb.client, owner, shelfId: SHELF });
+}
+
+const deleted = (sb: ReturnType<typeof fakeSupabase>) =>
+  Array.from({ length: sb.tableCalls('shelves') }, (_, n) => sb.opsFor('shelves', n)).some((ops) =>
+    ops.some(([op]) => op === 'delete'),
+  );
+
+describe('handleDeleteShelf', () => {
+  it('401 without a session', async () => {
+    const sb = fakeSupabase({ shelves: OWN });
+    expect((await deleteRequest(sb, { owner: undefined })).status).toBe(401);
+    expect(sb.from).not.toHaveBeenCalled();
+  });
+
+  it("404 for a stranger's shelf", async () => {
+    const sb = fakeSupabase({ shelves: { data: null, error: null } });
+    expect((await deleteRequest(sb)).status).toBe(404);
+    expect(deleted(sb)).toBe(false);
+  });
+
+  it('409 last_shelf when it is the only one, and deletes nothing', async () => {
+    const sb = fakeSupabase({ shelves: [OWN, roomFor(1), { data: null, error: null }] });
+    const res = await deleteRequest(sb);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'last_shelf' });
+    expect(deleted(sb)).toBe(false);
+  });
+
+  it('204 and deletes by id', async () => {
+    const sb = fakeSupabase({ shelves: [OWN, roomFor(2), { data: null, error: null }] });
+    expect((await deleteRequest(sb)).status).toBe(204);
+    expect(sb.opsFor('shelves', 2)).toEqual([['delete'], ['eq', 'id', SHELF]]);
+  });
+
+  it('500 when the delete fails', async () => {
+    const sb = fakeSupabase({
+      shelves: [OWN, roomFor(2), { data: null, error: { message: 'boom' } }],
+    });
+    expect((await deleteRequest(sb)).status).toBe(500);
+  });
+});
+
+// ---- reordering shelves ----------------------------------------------
+
+function reorderShelvesRequest(
+  body: unknown,
+  { owner }: { owner: string | undefined } = { owner: OWNER },
+) {
+  const sb = fakeSupabase({});
+  return { sb, res: handleReorderShelves({ supabase: sb.client, owner, body }) };
+}
+
+describe('handleReorderShelves', () => {
+  it('401 without a session', async () => {
+    const { sb, res } = reorderShelvesRequest({ order: [SHELF] }, { owner: undefined });
+    expect((await res).status).toBe(401);
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['duplicates', { order: [SHELF, SHELF] }],
+    ['a non-UUID', { order: [SHELF, 'nope'] }],
+    ['an empty list', { order: [] }],
+    ['no body', null],
+  ])('400 for %s', async (_, body) => {
+    const { sb, res } = reorderShelvesRequest(body);
+    expect((await res).status).toBe(400);
+    expect(sb.rpc).not.toHaveBeenCalled();
+  });
+
+  it('204 and one reorder_shelves call', async () => {
+    const { sb, res } = reorderShelvesRequest({ order: [OTHER_SHELF, SHELF] });
+    expect((await res).status).toBe(204);
+    expect(sb.rpc).toHaveBeenCalledWith('reorder_shelves', { p_order: [OTHER_SHELF, SHELF] });
   });
 });

@@ -20,6 +20,8 @@
   --thumb: #ffffff;
   --brass: #b8905a;
   --success: #2f7d4f;
+  /* Destructive actions. Lifted in dark so it still reads on the dark wall. */
+  --danger: #b03a2e;
   /* The walnut texture is one image; these light it for the theme. */
   --wood-dim: rgba(0, 0, 0, 0.04);
   --wall-shadow: rgba(0, 0, 0, 0.2);
@@ -37,6 +39,7 @@
     --thumb: #4a4a48;
     --brass: #c19a63;
     --success: #5cbf86;
+    --danger: #e0675b;
     --wood-dim: rgba(0, 0, 0, 0.14);
     --wall-shadow: rgba(0, 0, 0, 0.5);
   }
@@ -53,6 +56,7 @@
   --thumb: #4a4a48;
   --brass: #c19a63;
   --success: #5cbf86;
+  --danger: #e0675b;
   --wood-dim: rgba(0, 0, 0, 0.14);
   --wall-shadow: rgba(0, 0, 0, 0.5);
 }

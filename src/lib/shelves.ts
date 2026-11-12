@@ -147,6 +147,44 @@ export async function reorderShelf(sb: Db, shelfId: string, order: number[]): Pr
   if (error) fail('reorderShelf', error);
 }
 
+/** `order` is the target shelf's whole film list after the move, the moved
+ *  film included, so the server assigns every position. */
+export async function moveFilm(
+  sb: Db,
+  filmId: number,
+  fromShelfId: string,
+  toShelfId: string,
+  order: number[],
+): Promise<void> {
+  const { error } = await sb.rpc('move_film', {
+    p_film: filmId,
+    p_from: fromShelfId,
+    p_to: toShelfId,
+    p_order: order,
+  });
+  if (error) fail('moveFilm', error);
+}
+
+export async function reorderShelves(sb: Db, order: string[]): Promise<void> {
+  const { error } = await sb.rpc('reorder_shelves', { p_order: order });
+  if (error) fail('reorderShelves', error);
+}
+
+/** The shelf's items go with it (`on delete cascade`); the films cache stays. */
+export async function deleteShelf(sb: Db, shelfId: string): Promise<void> {
+  const { error } = await sb.from('shelves').delete().eq('id', shelfId);
+  if (error) fail('deleteShelf', error);
+}
+
+export async function countOwnShelves(sb: Db, owner: string): Promise<number> {
+  const { count, error } = await sb
+    .from('shelves')
+    .select('id', { count: 'exact', head: true })
+    .eq('owner', owner);
+  if (error) fail('countOwnShelves', error);
+  return count ?? 0;
+}
+
 /**
  * One call for everything a bookcase draws: PostgREST follows both foreign
  * keys, and nothing here reaches TMDB.
@@ -164,7 +202,7 @@ export async function listShelvesWithFilms(
 ): Promise<ShelfWithFilms[]> {
   let query = sb.from('shelves').select(SHELF_WITH_FILMS_COLUMNS).eq('owner', owner);
   if (publicOnly) query = query.eq('is_public', true);
-  const { data, error } = await query.order('created_at', { ascending: true });
+  const { data, error } = await query.order('position', { ascending: true });
   if (error) fail('listShelvesWithFilms', error);
   // The untyped client cannot know `films` is the one side of the foreign key
   // and infers an array, hence the double cast.

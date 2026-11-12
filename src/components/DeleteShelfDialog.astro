@@ -1,0 +1,140 @@
+---
+import { LABEL_CANCEL, SHELF_DELETE, SHELF_DELETE_BODY, SHELF_DELETE_NOTE } from '../constants';
+---
+
+<dialog id="delete-shelf" aria-labelledby="delete-shelf-title">
+  <h2 id="delete-shelf-title"></h2>
+  <p class="body">{SHELF_DELETE_BODY}</p>
+  <p class="note">{SHELF_DELETE_NOTE}</p>
+
+  <p id="delete-shelf-error" class="error" role="alert"></p>
+
+  <div class="actions">
+    <button type="button" id="delete-shelf-cancel" class="quiet">{LABEL_CANCEL}</button>
+    <button type="button" id="delete-shelf-confirm" class="danger">{SHELF_DELETE}</button>
+  </div>
+</dialog>
+
+<style>
+  dialog {
+    width: min(360px, calc(100vw - 32px));
+    padding: 22px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--field);
+    color: var(--ink);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
+  }
+
+  dialog::backdrop {
+    background: rgba(8, 8, 8, 0.55);
+  }
+
+  h2 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .body {
+    margin: 0 0 4px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .note {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+
+  .error {
+    margin: 14px 0 0;
+    font-size: 12.5px;
+    color: var(--danger);
+  }
+
+  .error:empty {
+    display: none;
+  }
+
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 22px;
+  }
+
+  .actions button {
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .quiet {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--muted);
+  }
+
+  .quiet:hover {
+    color: var(--ink);
+  }
+
+  .danger {
+    background: var(--danger);
+    border: 1px solid var(--danger);
+    color: #ffffff;
+  }
+
+  .actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+</style>
+
+<script>
+  import { deleteShelf } from '../lib/shelf-api';
+  import { deleteShelfTitle } from '../lib/shelf-rules';
+  import { SHELF_DELETE_FAILED } from '../constants';
+
+  const dialog = document.querySelector<HTMLDialogElement>('#delete-shelf');
+  const title = document.querySelector<HTMLElement>('#delete-shelf-title');
+  const error = document.querySelector<HTMLElement>('#delete-shelf-error');
+  const cancelButton = document.querySelector<HTMLButtonElement>('#delete-shelf-cancel');
+  const confirmButton = document.querySelector<HTMLButtonElement>('#delete-shelf-confirm');
+
+  if (dialog && title && error && cancelButton && confirmButton) {
+    let shelfId: string | null = null;
+    const buttons = [cancelButton, confirmButton];
+
+    document.addEventListener('click', (event) => {
+      const trigger = (event.target as HTMLElement).closest<HTMLElement>('[data-delete-shelf]');
+      const shelf = trigger?.closest<HTMLElement>('[data-shelf-id]');
+      if (!shelf) return;
+
+      shelfId = shelf.dataset.shelfId ?? null;
+      // Counted now, not at render: films may have been moved in or out since.
+      const filmCount = shelf.querySelectorAll('.slot').length;
+      title.textContent = deleteShelfTitle(shelf.dataset.labelName ?? null, filmCount);
+      error.textContent = '';
+      buttons.forEach((button) => (button.disabled = false));
+      dialog.showModal();
+      cancelButton.focus();
+    });
+
+    // The bookcase, the search field's shelf list and the delete buttons all
+    // change with a shelf gone, so the page is redrawn by the server.
+    confirmButton.addEventListener('click', async () => {
+      if (!shelfId) return;
+      buttons.forEach((button) => (button.disabled = true));
+      if (await deleteShelf(shelfId)) return location.reload();
+      buttons.forEach((button) => (button.disabled = false));
+      error.textContent = SHELF_DELETE_FAILED;
+    });
+
+    cancelButton.addEventListener('click', () => dialog.close());
+  }
+</script>

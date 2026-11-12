@@ -106,12 +106,34 @@ export const PROFILE_PATH_PREFIX = '/u/';
 // separate components with separate scripts, stay in step without a reload.
 export const FILM_ADDED_EVENT = 'shelf:film-added';
 export const FILM_REMOVED_EVENT = 'shelf:film-removed';
+export const FILM_MOVED_EVENT = 'shelf:film-moved';
+export const SHELVES_REORDERED_EVENT = 'shelf:shelves-reordered';
 
 export const SHELF_EMPTY_HINT =
   'Tu estantería está vacía. Añade tu primera película desde el buscador.';
 export const ADD_SHELF = '+ Añadir balda';
 export const ADD_SHELF_FAILED = 'No se pudo añadir la balda. Inténtalo otra vez.';
 export const REORDER_FAILED = 'No se pudo guardar el orden. Inténtalo otra vez.';
+export const MOVE_FAILED = 'No se pudo mover la película. Inténtalo otra vez.';
+export const MOVE_TARGET_FULL = 'Esa balda está llena.';
+export const SHELVES_REORDER_FAILED =
+  'No se pudo guardar el orden de las baldas. Inténtalo otra vez.';
+
+// The "−" button's accessible name and the confirmation's red button.
+export const SHELF_DELETE = 'Borrar balda';
+export const SHELF_DELETE_BODY = 'La balda y todo lo que tiene desaparecen de tu colección.';
+export const SHELF_DELETE_NOTE = 'Podrás volver a añadir esas películas desde el buscador.';
+export const SHELF_DELETE_FAILED = 'No se pudo borrar la balda. Inténtalo otra vez.';
+
+// The confirmation title is assembled from these at the call site, like
+// AUTH_EMAIL_TOKEN: the shelf's label and how many films go with it.
+export const SHELF_NAME_TOKEN = '{name}';
+export const SHELF_FILMS_TOKEN = '{films}';
+export const SHELF_COUNT_TOKEN = '{count}';
+export const SHELF_DELETE_NAMED = `¿Borrar «${SHELF_NAME_TOKEN}»${SHELF_FILMS_TOKEN}?`;
+export const SHELF_DELETE_UNNAMED = `¿Borrar esta balda${SHELF_FILMS_TOKEN}?`;
+export const SHELF_DELETE_FILMS_ONE = ' y su película';
+export const SHELF_DELETE_FILMS_MANY = ` y sus ${SHELF_COUNT_TOKEN} películas`;
 
 export const CASE_REMOVE = 'Quitar de la estantería';
 export const CASE_REMOVE_FAILED = 'No se pudo quitar la película. Inténtalo otra vez.';
