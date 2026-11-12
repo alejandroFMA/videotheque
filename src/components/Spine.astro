@@ -34,10 +34,11 @@ const { film } = Astro.props;
     flex: 0 1 var(--w, 34px);
     min-width: 0;
     height: var(--spine-h);
-    /* Horizontal drags reorder; vertical ones still scroll the page. */
+    /* A swipe still scrolls the page; a drag starts with a long press. */
     touch-action: pan-y;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-touch-callout: none;
     transition: transform 160ms ease;
   }
 
@@ -98,17 +99,17 @@ const { film } = Astro.props;
     transform: translateY(-9px);
   }
 
-  .slot:global(.dragging) {
-    z-index: 4;
-    transform: translateY(-16px);
+  /* Where the carried spine will land: its own slot, emptied to a gap. */
+  .slot:global(.placeholder) {
+    transform: none;
     transition: none;
+    outline: 2px dashed var(--muted);
+    outline-offset: -2px;
+    border-radius: 2px;
   }
 
-  .slot:global(.dragging) .spine {
-    cursor: grabbing;
-    box-shadow:
-      inset 0 0 0 1px rgba(0, 0, 0, 0.16),
-      0 10px 16px rgba(0, 0, 0, 0.45);
+  .slot:global(.placeholder) .spine {
+    visibility: hidden;
   }
 
   @media (max-width: 819px) {

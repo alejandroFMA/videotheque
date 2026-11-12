@@ -13,6 +13,8 @@ Each step is a scope line, not a design. Each one gets its own spec under
 
 ## 1. Search and add feedback
 
+**Status:** done, 2026-11-12 (PR #20).
+
 **Goal:** adding a film should feel immediate and certain.
 
 Today, nothing in the search dropdown shows that a pick is being added, so

@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { fakeSupabase } from './helpers/fake-supabase';
 import {
+  countOwnShelves,
   createShelf,
+  deleteShelf,
   ensureFilmCached,
   filmsInOrder,
   findOwnShelf,
   listShelvesWithFilms,
+  moveFilm,
   placeFilm,
   removeFilm,
   reorderShelf,
+  reorderShelves,
   shelfHasFilm,
   shelfItemCount,
   shelvedFilmIds,
@@ -188,11 +192,11 @@ describe('listShelvesWithFilms', () => {
     expect(sb.opsFor('shelves')).toEqual(expect.arrayContaining([['eq', 'is_public', true]]));
   });
 
-  it('orders oldest first and returns an array when data is null', async () => {
+  it("orders by the owner's chosen position and returns an array when data is null", async () => {
     const sb = fakeSupabase({ shelves: { data: null, error: null } });
     expect(await listShelvesWithFilms(sb.client, OWNER)).toEqual([]);
     expect(sb.opsFor('shelves')).toEqual(
-      expect.arrayContaining([['order', 'created_at', { ascending: true }]]),
+      expect.arrayContaining([['order', 'position', { ascending: true }]]),
     );
   });
 
@@ -262,5 +266,52 @@ describe('updateShelfLabel', () => {
       ['update', change],
       ['eq', 'id', SHELF],
     ]);
+  });
+});
+
+describe('moveFilm', () => {
+  it('calls move_film with the film, both shelves and the target order', async () => {
+    const sb = fakeSupabase({}, { move_film: { data: null, error: null } });
+    await moveFilm(sb.client, 603, 'a', 'b', [1, 603]);
+    expect(sb.rpc).toHaveBeenCalledWith('move_film', {
+      p_film: 603,
+      p_from: 'a',
+      p_to: 'b',
+      p_order: [1, 603],
+    });
+  });
+
+  it('throws when Supabase reports an error', async () => {
+    const sb = fakeSupabase({}, { move_film: { data: null, error: { message: 'boom' } } });
+    await expect(moveFilm(sb.client, 603, 'a', 'b', [603])).rejects.toThrow(/boom/);
+  });
+});
+
+describe('reorderShelves', () => {
+  it('calls reorder_shelves with the ids in order', async () => {
+    const sb = fakeSupabase({}, { reorder_shelves: { data: null, error: null } });
+    await reorderShelves(sb.client, ['b', 'a']);
+    expect(sb.rpc).toHaveBeenCalledWith('reorder_shelves', { p_order: ['b', 'a'] });
+  });
+});
+
+describe('deleteShelf', () => {
+  it('deletes the shelf row by id', async () => {
+    const sb = fakeSupabase({ shelves: { data: null, error: null } });
+    await deleteShelf(sb.client, SHELF);
+    expect(sb.opsFor('shelves')).toEqual([['delete'], ['eq', 'id', SHELF]]);
+  });
+
+  it('throws when Supabase reports an error', async () => {
+    const sb = fakeSupabase({ shelves: { data: null, error: { message: 'boom' } } });
+    await expect(deleteShelf(sb.client, SHELF)).rejects.toThrow(/boom/);
+  });
+});
+
+describe('countOwnShelves', () => {
+  it("counts only the owner's shelves", async () => {
+    const sb = fakeSupabase({ shelves: { data: null, error: null, count: 2 } });
+    expect(await countOwnShelves(sb.client, OWNER)).toBe(2);
+    expect(sb.opsFor('shelves')).toEqual(expect.arrayContaining([['eq', 'owner', OWNER]]));
   });
 });

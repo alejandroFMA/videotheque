@@ -215,10 +215,16 @@ const { shelvedIds, shelves } = Astro.props;
     type ShelfSlot,
   } from '../lib/shelf-target';
   import { addOwnsList, rowState, type PendingAdd, type RowState } from '../lib/add-flow';
-  import type { FilmAddedDetail, FilmRemovedDetail } from '../types';
+  import type {
+    FilmAddedDetail,
+    FilmMovedDetail,
+    FilmRemovedDetail,
+    ShelvesReorderedDetail,
+  } from '../types';
   import {
     ADD_FAILED,
     FILM_ADDED_EVENT,
+    FILM_MOVED_EVENT,
     FILM_REMOVED_EVENT,
     SEARCH_ADDED,
     SEARCH_ADDING,
@@ -226,6 +232,7 @@ const { shelvedIds, shelves } = Astro.props;
     SEARCH_FAILED,
     SEARCH_ON_SHELF,
     SHELF_FULL_MESSAGE,
+    SHELVES_REORDERED_EVENT,
   } from '../constants';
 
   const DEBOUNCE_MS = 250;
@@ -481,6 +488,22 @@ const { shelvedIds, shelves } = Astro.props;
       const slot = slots.find((candidate) => candidate.id === shelfId);
       if (slot) slot.filmCount -= 1;
       if (!list.hidden && results.length > 0) paint();
+    });
+
+    // A moved film stays shelved; only how full the two shelves are changes.
+    document.addEventListener(FILM_MOVED_EVENT, (event) => {
+      const { fromShelfId, toShelfId } = (event as CustomEvent<FilmMovedDetail>).detail;
+      const from = slots.find((candidate) => candidate.id === fromShelfId);
+      const to = slots.find((candidate) => candidate.id === toShelfId);
+      if (from) from.filmCount -= 1;
+      if (to) to.filmCount += 1;
+    });
+
+    // The first shelf with room is found in page order, so the list has to
+    // follow the owner's new order of shelves.
+    document.addEventListener(SHELVES_REORDERED_EVENT, (event) => {
+      const { order } = (event as CustomEvent<ShelvesReorderedDetail>).detail;
+      slots.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     });
 
     input.addEventListener('input', () => {

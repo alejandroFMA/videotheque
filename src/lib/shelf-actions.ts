@@ -10,12 +10,16 @@ import {
   unauthorized,
 } from './http';
 import {
+  countOwnShelves,
   createShelf,
+  deleteShelf,
   ensureFilmCached,
   findOwnShelf,
+  moveFilm,
   placeFilm,
   removeFilm,
   reorderShelf,
+  reorderShelves,
   shelfHasFilm,
   shelfItemCount,
   updateShelfLabel,
@@ -257,6 +261,111 @@ export async function handleUpdateShelf(ctx: UpdateShelfContext): Promise<Respon
     await updateShelfLabel(ctx.supabase, guard.id, change);
   } catch (err) {
     console.error('[api/shelves] label update failed', err);
+    return internalError();
+  }
+  return noContent();
+}
+
+export interface MoveFilmContext {
+  supabase: SupabaseClient;
+  owner: string | undefined;
+  /** The target shelf, from the route. */
+  shelfId: string | undefined;
+  body: unknown;
+}
+
+interface MoveFilmRequest {
+  filmId: number;
+  fromShelfId: string;
+  order: number[];
+}
+
+function parseMove(body: unknown, toShelfId: string): MoveFilmRequest | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const { filmId: rawFilmId, fromShelfId } = body as Record<string, unknown>;
+
+  const filmId = parseFilmId(rawFilmId);
+  const order = parseOrder(body);
+  if (filmId === null || order === null || !order.includes(filmId)) return null;
+  if (typeof fromShelfId !== 'string' || !UUID_PATTERN.test(fromShelfId)) return null;
+  if (fromShelfId === toShelfId) return null;
+
+  return { filmId, fromShelfId, order };
+}
+
+export async function handleMoveFilm(ctx: MoveFilmContext): Promise<Response> {
+  const target = await requireOwnShelf(ctx.supabase, ctx.owner, ctx.shelfId);
+  if (target instanceof Response) return target;
+
+  const move = parseMove(ctx.body, target.id);
+  if (!move) return badRequest('invalid move');
+
+  const source = await requireOwnShelf(ctx.supabase, ctx.owner, move.fromShelfId);
+  if (source instanceof Response) return source;
+
+  try {
+    if (!(await shelfHasFilm(ctx.supabase, source.id, move.filmId))) return notFound();
+    if ((await shelfItemCount(ctx.supabase, target.id)) >= SHELF_CAPACITY) {
+      return conflict({ error: 'shelf_full', message: SHELF_FULL_MESSAGE });
+    }
+    await moveFilm(ctx.supabase, move.filmId, source.id, target.id, move.order);
+  } catch (err) {
+    console.error('[api/shelves] move failed', err);
+    return internalError();
+  }
+  return noContent();
+}
+
+export interface DeleteShelfContext {
+  supabase: SupabaseClient;
+  owner: string | undefined;
+  shelfId: string | undefined;
+}
+
+export async function handleDeleteShelf(ctx: DeleteShelfContext): Promise<Response> {
+  const guard = await requireOwnShelf(ctx.supabase, ctx.owner, ctx.shelfId);
+  if (guard instanceof Response) return guard;
+
+  try {
+    // The page hides the button on the last shelf; a stale tab can still ask,
+    // and a bookcase with no shelf has nowhere to add a film.
+    if ((await countOwnShelves(ctx.supabase, ctx.owner as string)) <= 1) {
+      return conflict({ error: 'last_shelf' });
+    }
+    await deleteShelf(ctx.supabase, guard.id);
+  } catch (err) {
+    console.error('[api/shelves] delete failed', err);
+    return internalError();
+  }
+  return noContent();
+}
+
+export interface ReorderShelvesContext {
+  supabase: SupabaseClient;
+  owner: string | undefined;
+  body: unknown;
+}
+
+function parseShelfOrder(body: unknown): string[] | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const order = (body as { order?: unknown }).order;
+  if (!Array.isArray(order) || order.length === 0) return null;
+  if (!order.every((id) => typeof id === 'string' && UUID_PATTERN.test(id))) return null;
+  if (new Set(order).size !== order.length) return null;
+  return order as string[];
+}
+
+/** No per-shelf guard: reorder_shelves only touches the caller's own rows. */
+export async function handleReorderShelves(ctx: ReorderShelvesContext): Promise<Response> {
+  if (!ctx.owner) return unauthorized();
+
+  const order = parseShelfOrder(ctx.body);
+  if (order === null) return badRequest('invalid order');
+
+  try {
+    await reorderShelves(ctx.supabase, order);
+  } catch (err) {
+    console.error('[api/shelves] shelves reorder failed', err);
     return internalError();
   }
   return noContent();

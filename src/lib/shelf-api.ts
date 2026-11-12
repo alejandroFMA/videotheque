@@ -59,3 +59,33 @@ export function saveShelfLabel(
     }),
   );
 }
+
+/** `order` is the target shelf's films after the move, the moved one included. */
+export function moveFilmToShelf(
+  toShelfId: string,
+  move: { filmId: number; fromShelfId: string; order: number[] },
+  doFetch: typeof fetch = fetch,
+): Promise<boolean> {
+  return succeeded(() =>
+    doFetch(`${SHELVES_PATH}/${toShelfId}/moves`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(move),
+    }),
+  );
+}
+
+export function deleteShelf(shelfId: string, doFetch: typeof fetch = fetch): Promise<boolean> {
+  return succeeded(() => doFetch(`${SHELVES_PATH}/${shelfId}`, { method: 'DELETE' }));
+}
+
+/** `order` is every one of the owner's shelf ids, top to bottom. */
+export function saveShelvesOrder(order: string[], doFetch: typeof fetch = fetch): Promise<boolean> {
+  return succeeded(() =>
+    doFetch(`${SHELVES_PATH}/order`, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ order }),
+    }),
+  );
+}

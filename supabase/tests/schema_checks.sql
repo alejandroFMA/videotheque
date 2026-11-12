@@ -200,6 +200,95 @@ begin
     'anon must not see a private shelf items via the films join (got ' || n || ')';
 end $$;
 
+-- ---- shelf order: new shelves are appended per owner ----------------
+-- shelf-a came from the sign-up trigger, shelf-a2 was inserted after it.
+reset role;
+
+do $$
+begin
+  assert (select position from public.shelves where slug = 'shelf-a') = 1,
+    'the first shelf of an owner must get position 1';
+  assert (select position from public.shelves where slug = 'shelf-a2') = 2,
+    'a later shelf must be appended after the owner''s last one';
+  assert (select position from public.shelves where slug = 'shelf-b') = 1,
+    'positions count per owner, not globally';
+end $$;
+
+-- ---- reorder_shelves, as user A --------------------------------------
+set local role authenticated;
+set local "request.jwt.claims" =
+  '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
+
+do $$
+declare a1 uuid; a2 uuid;
+begin
+  select id into a1 from public.shelves where slug = 'shelf-a';
+  select id into a2 from public.shelves where slug = 'shelf-a2';
+
+  perform public.reorder_shelves(array[a2, a1]);
+  assert (select position from public.shelves where id = a2) = 1,
+    'reorder_shelves: shelf-a2 should be first';
+  assert (select position from public.shelves where id = a1) = 2,
+    'reorder_shelves: shelf-a should be second';
+end $$;
+
+-- ---- move_film, as user A -------------------------------------------
+-- shelf-a holds 1726, 603, 24428; shelf-a2 is empty.
+do $$
+declare a1 uuid; a2 uuid; raised boolean := false;
+begin
+  select id into a1 from public.shelves where slug = 'shelf-a';
+  select id into a2 from public.shelves where slug = 'shelf-a2';
+
+  perform public.move_film(603, a1, a2, array[603]);
+  assert (select shelf_id from public.shelf_items where film_id = 603) = a2,
+    'move_film must put the film on the target shelf';
+  assert (select count(*) from public.shelf_items where film_id = 603) = 1,
+    'move_film must leave the film on exactly one shelf';
+  assert (select position from public.shelf_items where film_id = 603) = 1,
+    'move_film must place the film at its index in the target order';
+
+  perform public.move_film(1726, a1, a2, array[1726, 603]);
+  assert (select position from public.shelf_items
+            where shelf_id = a2 and film_id = 1726) = 1,
+    'move_film: the moved film takes the requested slot';
+  assert (select position from public.shelf_items
+            where shelf_id = a2 and film_id = 603) = 2,
+    'move_film: the target''s other films follow the requested order';
+
+  begin
+    perform public.move_film(24428, a2, a1, array[24428]);
+  exception when others then
+    raised := true;
+  end;
+  assert raised, 'move_film must refuse a film that is not on the source shelf';
+end $$;
+
+-- ---- neither function reaches another owner's shelves ---------------
+set local "request.jwt.claims" =
+  '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}';
+
+do $$
+declare a1 uuid; a2 uuid; raised boolean := false;
+begin
+  select id into a1 from public.shelves where slug = 'shelf-a';
+  select id into a2 from public.shelves where slug = 'shelf-a2';
+
+  perform public.reorder_shelves(array[a1, a2]);
+  assert (select position from public.shelves where id = a1) = 2,
+    'reorder_shelves by a non-owner must not change positions';
+
+  begin
+    perform public.move_film(24428, a1, current_setting('test.shelf_b_id')::uuid,
+                             array[24428]);
+  exception when others then
+    raised := true;
+  end;
+  assert raised, 'move_film by a non-owner must fail';
+  assert (select shelf_id from public.shelf_items where film_id = 24428) = a1,
+    'move_film by a non-owner must leave the film where it was';
+end $$;
+
 reset role;
 rollback;
 
