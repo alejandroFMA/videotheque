@@ -84,13 +84,14 @@ export const HOME_PAGE_TITLE = 'Tu estantería · Videothèque';
 export const HEADER_HOME_LABEL = `${WORDMARK} · ir a tu estantería`;
 
 // The search placeholder is the one string the shelf spec names verbatim.
-export const SEARCH_PLACEHOLDER = 'Busca una película para archivarla';
+export const SEARCH_PLACEHOLDER = 'Añade una película a tu estantería';
 export const SEARCH_LABEL = 'Buscar películas';
 export const SEARCH_RESULTS_LABEL = 'Resultados de la búsqueda';
 export const SEARCH_ON_SHELF = 'Ya en la estantería';
 export const SEARCH_EMPTY = 'No hay resultados';
 export const SEARCH_FAILED = 'No se pudo buscar. Inténtalo otra vez.';
 export const SEARCH_ADDING = 'Añadiendo…';
+export const SEARCH_ADDED = 'Película añadida';
 export const ADD_FAILED = 'No se pudo añadir la película. Inténtalo otra vez.';
 
 export const ACCOUNT_MENU_LABEL = 'Tu cuenta';
@@ -106,7 +107,8 @@ export const PROFILE_PATH_PREFIX = '/u/';
 export const FILM_ADDED_EVENT = 'shelf:film-added';
 export const FILM_REMOVED_EVENT = 'shelf:film-removed';
 
-export const SHELF_EMPTY_HINT = 'Tu estantería está vacía. Busca una película para archivarla.';
+export const SHELF_EMPTY_HINT =
+  'Tu estantería está vacía. Añade tu primera película desde el buscador.';
 export const ADD_SHELF = '+ Añadir balda';
 export const ADD_SHELF_FAILED = 'No se pudo añadir la balda. Inténtalo otra vez.';
 export const REORDER_FAILED = 'No se pudo guardar el orden. Inténtalo otra vez.';

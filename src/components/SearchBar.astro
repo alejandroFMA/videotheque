@@ -46,13 +46,12 @@ const { shelvedIds, shelves } = Astro.props;
      separating chrome from wall. A full radius does that in light theme, where
      tone alone barely registers. */
   input {
-    width: 280px;
-    max-width: 100%;
-    padding: 9px 16px;
+    width: 100%;
+    padding: 13px 22px;
     background: var(--field);
     border: 1px solid var(--hairline);
     border-radius: 999px;
-    font-size: 13px;
+    font-size: 16.5px;
   }
 
   input::placeholder {
@@ -71,26 +70,27 @@ const { shelvedIds, shelves } = Astro.props;
   #film-results {
     position: absolute;
     top: calc(100% + 8px);
-    right: 0;
+    left: 50%;
     z-index: 20;
-    width: 340px;
+    width: 480px;
     max-width: 92vw;
     max-height: 60vh;
     overflow-y: auto;
     margin: 0;
-    padding: 5px;
+    padding: 6px;
     list-style: none;
     background: var(--field);
     border: 1px solid var(--hairline);
     border-radius: var(--radius);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+    transform: translateX(-50%);
   }
 
   #film-results :global(li) {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 7px 9px;
+    gap: 14px;
+    padding: 10px 12px;
     border-radius: 5px;
     cursor: pointer;
   }
@@ -100,10 +100,19 @@ const { shelvedIds, shelves } = Astro.props;
     background: var(--track);
   }
 
+  #film-results :global(li.disabled) {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  #film-results :global(li.disabled:hover) {
+    background: none;
+  }
+
   #film-results :global(img),
   #film-results :global(.no-poster) {
-    width: 34px;
-    height: 51px;
+    width: 48px;
+    height: 72px;
     flex: none;
     border-radius: 2px;
     object-fit: cover;
@@ -111,36 +120,88 @@ const { shelvedIds, shelves } = Astro.props;
   }
 
   #film-results :global(.title) {
-    font-size: 13px;
+    font-size: 16.5px;
+    font-weight: 500;
     color: var(--ink);
   }
 
   #film-results :global(.meta) {
-    font-size: 11.5px;
+    margin-top: 2px;
+    font-size: 14px;
     color: var(--muted);
   }
 
   #film-results :global(.state) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-left: auto;
-    font-size: 11px;
-    color: var(--brass);
+    font-size: 13.5px;
+    font-weight: 500;
     white-space: nowrap;
   }
 
+  #film-results :global(.state.adding) {
+    color: var(--muted);
+  }
+
+  #film-results :global(.state.added),
+  #film-results :global(.state.shelved) {
+    color: var(--success);
+  }
+
+  #film-results :global(.check) {
+    flex: none;
+    width: 16px;
+    height: 16px;
+  }
+
+  #film-results :global(.state.added .check) {
+    width: 18px;
+    height: 18px;
+  }
+
+  #film-results :global(.check circle) {
+    fill: var(--success);
+  }
+
+  #film-results :global(.check path) {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Kept spinning under reduced motion on purpose: it is the only sign the
+     add is still running, and a still ring reads as a stuck icon. */
+  #film-results :global(.spinner) {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--hairline);
+    border-top-color: var(--ink);
+    border-radius: 50%;
+    animation: search-spin 0.8s linear infinite;
+  }
+
+  @keyframes search-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   #film-results :global(.notice) {
-    padding: 12px 10px;
-    font-size: 12.5px;
+    padding: 14px 12px;
+    font-size: 14.5px;
     color: var(--muted);
     cursor: default;
   }
 
   @media (max-width: 640px) {
-    input {
-      width: 100%;
-    }
-
     #film-results {
+      left: 0;
       width: 100%;
+      transform: none;
     }
   }
 </style>
@@ -148,12 +209,18 @@ const { shelvedIds, shelves } = Astro.props;
 <script>
   import { posterUrl, searchFilms, type TmdbSearchResult } from '../lib/tmdb';
   import { spineFromPoster } from '../lib/colors';
-  import { addFilmToFirstShelfWithRoom, type ShelfSlot } from '../lib/shelf-target';
+  import {
+    addFilmToFirstShelfWithRoom,
+    type AddOutcome,
+    type ShelfSlot,
+  } from '../lib/shelf-target';
+  import { addOwnsList, rowState, type PendingAdd, type RowState } from '../lib/add-flow';
   import type { FilmAddedDetail, FilmRemovedDetail } from '../types';
   import {
     ADD_FAILED,
     FILM_ADDED_EVENT,
     FILM_REMOVED_EVENT,
+    SEARCH_ADDED,
     SEARCH_ADDING,
     SEARCH_EMPTY,
     SEARCH_FAILED,
@@ -163,9 +230,48 @@ const { shelvedIds, shelves } = Astro.props;
 
   const DEBOUNCE_MS = 250;
   const MIN_QUERY_LENGTH = 2;
-  const THUMBNAIL_SIZE = 'w92';
+  const THUMBNAIL_SIZE = 'w154';
   const YEAR_LENGTH = 4;
   const OPTION_ID_PREFIX = 'film-result-';
+  const ADDED_DWELL_MS = 1200;
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const CHECK_VIEWBOX = '0 0 12 12';
+  const CHECK_CIRCLE = { cx: '6', cy: '6', r: '6' };
+  const CHECK_PATH = 'M3.2 6.2l1.9 1.9 3.8-4.1';
+  const BADGE_TEXT: Record<Exclude<RowState, 'idle' | 'disabled'>, string> = {
+    adding: SEARCH_ADDING,
+    added: SEARCH_ADDED,
+    shelved: SEARCH_ON_SHELF,
+  };
+
+  const checkIcon = () => {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', CHECK_VIEWBOX);
+    svg.setAttribute('aria-hidden', 'true');
+    svg.classList.add('check');
+    const circle = document.createElementNS(SVG_NS, 'circle');
+    for (const [name, value] of Object.entries(CHECK_CIRCLE)) circle.setAttribute(name, value);
+    const mark = document.createElementNS(SVG_NS, 'path');
+    mark.setAttribute('d', CHECK_PATH);
+    svg.append(circle, mark);
+    return svg;
+  };
+
+  const badgeFor = (state: RowState) => {
+    if (state === 'idle' || state === 'disabled') return null;
+    const badge = Object.assign(document.createElement('span'), {
+      className: `state ${state}`,
+    });
+    if (state === 'adding') {
+      const spinner = Object.assign(document.createElement('span'), { className: 'spinner' });
+      spinner.setAttribute('aria-hidden', 'true');
+      badge.append(spinner);
+    } else {
+      badge.append(checkIcon());
+    }
+    badge.append(BADGE_TEXT[state]);
+    return badge;
+  };
 
   const container = document.querySelector<HTMLElement>('.search');
   const input = document.querySelector<HTMLInputElement>('#film-search');
@@ -186,6 +292,9 @@ const { shelvedIds, shelves } = Astro.props;
     let timer: number | undefined;
     // Responses can land out of order; only the newest query may paint.
     let latest = 0;
+    // Lives in state rather than on the DOM because paint() rebuilds every row.
+    let pending: PendingAdd | null = null;
+    let dwellTimer: number | undefined;
 
     const setOpen = (open: boolean) => {
       list.hidden = !open;
@@ -196,6 +305,25 @@ const { shelvedIds, shelves } = Astro.props;
       setOpen(false);
       active = -1;
       input.removeAttribute('aria-activedescendant');
+    };
+
+    // Programmatic emptying fires no `input` event, so this repeats what the
+    // input handler does for a short query — including invalidating any
+    // search still in flight, which would otherwise reopen the list.
+    const finishAdd = () => {
+      window.clearTimeout(dwellTimer);
+      pending = null;
+      input.value = '';
+      latest += 1;
+      results = [];
+      close();
+    };
+
+    // After a successful add the query has done its job, so a user dismissal
+    // during the dwell ends it the same way the timer would.
+    const dismiss = () => {
+      if (pending?.phase === 'added') return finishAdd();
+      close();
     };
 
     const notice = (text: string) => {
@@ -248,14 +376,13 @@ const { shelvedIds, shelves } = Astro.props;
           );
           item.append(text);
 
-          if (shelved.has(film.id)) {
-            item.append(
-              Object.assign(document.createElement('span'), {
-                className: 'state',
-                textContent: SEARCH_ON_SHELF,
-              }),
-            );
+          const state = rowState(film.id, pending, shelved);
+          if (state === 'disabled') {
+            item.classList.add('disabled');
+            item.setAttribute('aria-disabled', 'true');
           }
+          const badge = badgeFor(state);
+          if (badge) item.append(badge);
 
           return item;
         }),
@@ -286,37 +413,64 @@ const { shelvedIds, shelves } = Astro.props;
 
     const pick = async (index: number) => {
       const film = results[index];
-      if (!film || shelved.has(film.id) || adding.has(film.id)) return;
+      if (!film || pending || shelved.has(film.id) || adding.has(film.id)) return;
 
       adding.add(film.id);
+      active = index;
+      const current: PendingAdd = { filmId: film.id, phase: 'adding', query: input.value.trim() };
+      pending = current;
       status.textContent = SEARCH_ADDING;
-      let outcome: Awaited<ReturnType<typeof addFilmToFirstShelfWithRoom>>;
+      paint();
+
+      let outcome: AddOutcome;
       try {
         // The colour has to exist before the request: the endpoint validates it,
         // and it is the one value the browser is trusted with.
         const spine = await spineFromPoster(film.poster_path ?? null, film.id);
         outcome = await addFilmToFirstShelfWithRoom(slots, { tmdbId: film.id, ...spine });
+      } catch {
+        // A throw here would leave `pending` set and every row dimmed for good.
+        outcome = { ok: false, reason: 'failed' };
       } finally {
         adding.delete(film.id);
       }
 
+      const message = outcome.ok
+        ? SEARCH_ADDED
+        : outcome.reason === 'all_full'
+          ? SHELF_FULL_MESSAGE
+          : ADD_FAILED;
+      status.textContent = message;
+
+      if (outcome.ok) {
+        shelved.add(film.id);
+        const slot = slots.find((candidate) => candidate.id === outcome.shelfId);
+        if (slot) slot.filmCount += 1;
+        document.dispatchEvent(
+          new CustomEvent<FilmAddedDetail>(FILM_ADDED_EVENT, {
+            detail: { shelfId: outcome.shelfId, film: outcome.film },
+          }),
+        );
+      }
+
+      // A newer query typed during the add owns the list: undim its results
+      // and leave the field alone.
+      if (!addOwnsList(current, input.value)) {
+        pending = null;
+        if (!list.hidden && results.length > 0) paint();
+        return;
+      }
+
       if (!outcome.ok) {
-        const message = outcome.reason === 'all_full' ? SHELF_FULL_MESSAGE : ADD_FAILED;
-        status.textContent = message;
+        pending = null;
         notice(message);
         return;
       }
 
-      shelved.add(film.id);
-      const slot = slots.find((candidate) => candidate.id === outcome.shelfId);
-      if (slot) slot.filmCount += 1;
-      status.textContent = '';
+      current.phase = 'added';
+      if (list.hidden) return finishAdd();
       paint();
-      document.dispatchEvent(
-        new CustomEvent<FilmAddedDetail>(FILM_ADDED_EVENT, {
-          detail: { shelfId: outcome.shelfId, film: outcome.film },
-        }),
-      );
+      dwellTimer = window.setTimeout(finishAdd, ADDED_DWELL_MS);
     };
 
     // The bookcase removes films without a reload, so the badge and the room
@@ -331,6 +485,10 @@ const { shelvedIds, shelves } = Astro.props;
 
     input.addEventListener('input', () => {
       window.clearTimeout(timer);
+      if (pending?.phase === 'added') {
+        window.clearTimeout(dwellTimer);
+        pending = null;
+      }
       const query = input.value.trim();
       if (query.length < MIN_QUERY_LENGTH) {
         // Invalidates a response already in flight; otherwise it lands after
@@ -344,8 +502,8 @@ const { shelvedIds, shelves } = Astro.props;
     });
 
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') return close();
-      if (list.hidden || results.length === 0) return;
+      if (event.key === 'Escape') return dismiss();
+      if (pending || list.hidden || results.length === 0) return;
 
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
@@ -368,7 +526,7 @@ const { shelvedIds, shelves } = Astro.props;
 
     document.addEventListener('pointerdown', (event) => {
       const target = event.target as Node;
-      if (!list.hidden && !list.contains(target) && !input.contains(target)) close();
+      if (!list.hidden && !list.contains(target) && !input.contains(target)) dismiss();
     });
 
     // relatedTarget is the element receiving focus; null means focus left the
@@ -379,7 +537,7 @@ const { shelvedIds, shelves } = Astro.props;
     container.addEventListener('focusout', (event) => {
       const relatedTarget = event.relatedTarget as Node | null;
       if (!list.hidden && relatedTarget !== null && !container.contains(relatedTarget)) {
-        close();
+        dismiss();
       }
     });
   }
