@@ -221,6 +221,7 @@ const allFull =
 
   const TOAST_MS = 4000;
   const COVER_SIZE = 'w500';
+  const COVER_LOADED = 'loaded';
   const HALF = 0.5;
   // A finger held this long lifts a spine or a shelf; moving further than the
   // slop before then means the finger is scrolling instead.
@@ -247,7 +248,6 @@ const allFull =
     const boxSpine = part('.box-spine');
     const spineTitle = part('#case-spine-title');
     const cover = part<HTMLImageElement>('#case-cover');
-    const blank = part('#case-blank');
     const title = part('#case-title');
     const meta = part('#case-meta');
     const overview = part('#case-overview');
@@ -292,16 +292,23 @@ const allFull =
       box?.style.setProperty('--spine', slot.style.getPropertyValue('--spine'));
       boxSpine?.classList.toggle('dark', Boolean(slot.querySelector('.spine.dark')));
 
+      // Changing `src` keeps the previous poster painted until the new one has
+      // loaded, so the cover stays transparent until then and the last film
+      // never shows. A poster already in cache is shown at once, unfaded.
       const url = posterUrl(slot.dataset.poster, COVER_SIZE);
-      if (cover && blank) {
-        cover.hidden = !url;
-        blank.hidden = Boolean(url);
+      if (cover) {
         if (url) cover.src = url;
         else cover.removeAttribute('src');
+        cover.classList.toggle(
+          COVER_LOADED,
+          Boolean(url) && cover.complete && cover.naturalWidth > 0,
+        );
       }
 
       dialog.showModal();
     };
+
+    cover?.addEventListener('load', () => cover.classList.add(COVER_LOADED));
 
     dialog.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
