@@ -31,6 +31,10 @@ const FILM_ROW = {
   poster_path: '/abc.jpg',
   overview: 'Neo',
   director: 'Lana Wachowski',
+  backdrop_paths: [],
+  cast_names: [],
+  crew: [],
+  companies: [],
 };
 const SPINE = { spine_color: 'hsl(210 42% 40%)', spine_dark: true };
 

@@ -8,7 +8,7 @@ const movieFixture: TmdbMovie = JSON.parse(
 
 describe('toFilmRow', () => {
   it('maps a full TMDB movie to a films row', () => {
-    expect(toFilmRow(movieFixture)).toEqual({
+    expect(toFilmRow(movieFixture)).toMatchObject({
       id: 603,
       title: 'The Matrix',
       original_title: 'The Matrix',

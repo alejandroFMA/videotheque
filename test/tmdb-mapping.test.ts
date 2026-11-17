@@ -25,6 +25,55 @@ describe('toFilmRow', () => {
     const row = toFilmRow({ id: 1, title: 'X', credits: { crew: [{ job: 'Writer', name: 'A' }] } });
     expect(row.director).toBeNull();
   });
+
+  it('keeps the three most-voted textless backdrops', () => {
+    expect(toFilmRow(movieFixture).backdrop_paths).toEqual([
+      '/scene-b.jpg',
+      '/scene-d.jpg',
+      '/scene-a.jpg',
+    ]);
+  });
+
+  it('keeps the first six cast names in billing order', () => {
+    const { cast_names } = toFilmRow(movieFixture);
+    expect(cast_names).toHaveLength(6);
+    expect(cast_names[0]).toBe('Keanu Reeves');
+    expect(cast_names).not.toContain('Marcus Chong');
+  });
+
+  it('groups crew by job in print order, two distinct names at most', () => {
+    const { crew } = toFilmRow(movieFixture);
+    expect(crew.map((c) => c.job)).toEqual([
+      'screenplay',
+      'music',
+      'photography',
+      'editing',
+      'producer',
+    ]);
+    expect(crew.find((c) => c.job === 'producer')!.names).toEqual(['Joel Silver', 'Bruce Berman']);
+  });
+
+  it('leaves out a job nobody is credited for', () => {
+    const row = toFilmRow({ id: 1, title: 'X', credits: { crew: [{ job: 'Editor', name: 'A' }] } });
+    expect(row.crew).toEqual([{ job: 'editing', names: ['A'] }]);
+  });
+
+  it('keeps three companies with their logo path or null', () => {
+    expect(toFilmRow(movieFixture).companies).toEqual([
+      { name: 'Village Roadshow Pictures', logo_path: '/village.png' },
+      { name: 'Groucho II Film Partnership', logo_path: null },
+      { name: 'Silver Pictures', logo_path: '/silver.png' },
+    ]);
+  });
+
+  it('defaults every new field to empty when TMDB sends nothing', () => {
+    expect(toFilmRow({ id: 1, title: 'X' })).toMatchObject({
+      backdrop_paths: [],
+      cast_names: [],
+      crew: [],
+      companies: [],
+    });
+  });
 });
 
 describe('posterUrl', () => {
