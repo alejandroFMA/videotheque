@@ -1,4 +1,5 @@
 import type { EmailOtpType } from '@supabase/supabase-js';
+import type { CrewJob } from '../lib/tmdb-mapping';
 
 export const HOME_PATH = '/';
 export const LOGIN_PATH = '/login';
@@ -139,6 +140,19 @@ export const CASE_REMOVE = 'Quitar de la estantería';
 export const CASE_REMOVE_FAILED = 'No se pudo quitar la película. Inténtalo otra vez.';
 export const CASE_CLOSE = 'Cerrar';
 export const CASE_NO_OVERVIEW = 'Sin sinopsis.';
+export const CASE_FLIP = 'Dar la vuelta';
+
+// Printed on the back of the 3D case.
+export const CASE_CREW_LABELS: Record<CrewJob, string> = {
+  screenplay: 'GUION',
+  music: 'MÚSICA',
+  photography: 'FOTOGRAFÍA',
+  editing: 'MONTAJE',
+  producer: 'PRODUCIDA POR',
+};
+export const CASE_DIRECTED_BY = 'DIRIGIDA POR';
+export const CASE_AND = 'Y';
+export const CASE_FORMAT = 'VHS';
 
 // The postit is a shelf's `name` drawn on its `accent_color`, which the owner
 // picks freely. This is what the picker opens on for a shelf with no postit.

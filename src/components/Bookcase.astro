@@ -180,6 +180,15 @@ const allFull =
     filter: saturate(0.6);
   }
 
+  /* The spine whose 3D case is out: its slot stays, empty, until it lands. */
+  .bookcase :global(.slot.case-out) {
+    transform: none;
+  }
+
+  .bookcase :global(.slot.case-out .spine) {
+    visibility: hidden;
+  }
+
   .bookcase :global(.shelf.lifted) {
     z-index: 5;
     transform: translateY(-6px);
@@ -197,6 +206,9 @@ const allFull =
   } from '../lib/shelf-api';
   import { canDropOn, edgeScrollStep, movedFarEnough } from '../lib/shelf-rules';
   import { posterUrl } from '../lib/tmdb-mapping';
+  import { toCaseJson } from '../lib/case-details';
+  import { CASE_WIDTH, caseLayout } from '../lib/case-pose';
+  import type { CaseController } from '../lib/case-scene';
   import { safeSpineColor, spineWidth } from '../lib/spine';
   import {
     ADD_SHELF_FAILED,
@@ -222,6 +234,11 @@ const allFull =
   const TOAST_MS = 4000;
   const COVER_SIZE = 'w500';
   const COVER_LOADED = 'loaded';
+  const CASE_MODE_3D = '3d';
+  const RECORD_GAP_BESIDE = 64;
+  const RECORD_GAP_BELOW = 34;
+  const RECORD_SIDE_MARGIN = 20;
+  const RECORD_MAX_WIDTH = 400;
   const HALF = 0.5;
   // A finger held this long lifts a spine or a shelf; moving further than the
   // slop before then means the finger is scrolling instead.
@@ -277,8 +294,18 @@ const allFull =
     // ---- the pulled-out case ------------------------------------------------
 
     let opened: HTMLElement | null = null;
+    // Settles once, on the first open: the 3D controller, or null (no WebGL, or
+    // the chunk failed to load) so every open uses the static view.
+    let controllerReady: Promise<CaseController | null> | undefined;
+    let controller: CaseController | null = null;
+    // A second click while the first open is still loading the chunk.
+    let opening = false;
+    const caseLayer = part('#case-layer');
+    const record = part('.record');
+    const flipButton = part<HTMLButtonElement>('#case-flip');
+    const in3d = () => dialog.dataset.mode === CASE_MODE_3D;
 
-    const openCase = (slot: HTMLElement) => {
+    const fillRecord = (slot: HTMLElement) => {
       opened = slot;
       const name = slot.dataset.title ?? '';
       if (title) title.textContent = name;
@@ -288,6 +315,68 @@ const allFull =
       }
       if (overview) overview.textContent = slot.dataset.overview || CASE_NO_OVERVIEW;
       if (caseError) caseError.textContent = '';
+    };
+
+    /** Beside the case on a wide screen, under it on a narrow one. */
+    const placeRecord = () => {
+      if (!record) return;
+      const vp = { width: innerWidth, height: innerHeight };
+      const layout = caseLayout(vp);
+      record.classList.toggle('narrow', layout.narrow);
+      if (layout.narrow) {
+        const top = layout.cy + layout.caseHeight / 2 + RECORD_GAP_BELOW;
+        Object.assign(record.style, {
+          left: `${RECORD_SIDE_MARGIN}px`,
+          right: `${RECORD_SIDE_MARGIN}px`,
+          top: `${top}px`,
+          bottom: '0px',
+          width: 'auto',
+          translate: '',
+        });
+      } else {
+        const left = layout.cx + (CASE_WIDTH / 2) * layout.caseHeight + RECORD_GAP_BESIDE;
+        Object.assign(record.style, {
+          left: `${left}px`,
+          right: 'auto',
+          top: '50%',
+          bottom: 'auto',
+          width: `${Math.min(RECORD_MAX_WIDTH, vp.width - left - RECORD_SIDE_MARGIN)}px`,
+          translate: '0 -50%',
+        });
+      }
+    };
+
+    const closeCase = async () => {
+      if (!in3d()) return dialog.close();
+      if (!controller || controller.busy) return;
+      await controller.close();
+      dialog.close();
+    };
+
+    const loadController = (): Promise<CaseController | null> => {
+      if (!caseLayer) return Promise.resolve(null);
+      return import('../lib/case-scene')
+        .then(({ createCaseController }) =>
+          createCaseController({ layer: caseLayer, onCloseRequest: () => void closeCase() }),
+        )
+        .catch(() => null);
+    };
+
+    const openSlot = async (slot: HTMLElement) => {
+      if (dialog.open || opening) return;
+      opening = true;
+      controller = await (controllerReady ??= loadController());
+      opening = false;
+      if (!controller) return openCase(slot);
+      fillRecord(slot);
+      dialog.dataset.mode = CASE_MODE_3D;
+      placeRecord();
+      dialog.showModal();
+      await controller.open(slot);
+    };
+
+    const openCase = (slot: HTMLElement) => {
+      fillRecord(slot);
 
       box?.style.setProperty('--spine', slot.style.getPropertyValue('--spine'));
       boxSpine?.classList.toggle('dark', Boolean(slot.querySelector('.spine.dark')));
@@ -312,7 +401,30 @@ const allFull =
 
     dialog.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
-      if (target === dialog || target.closest('#case-close')) dialog.close();
+      if (target === dialog || target.closest('#case-close')) void closeCase();
+    });
+
+    // Esc: the 3D case flies home before the dialog closes.
+    dialog.addEventListener('cancel', (event) => {
+      if (!in3d()) return;
+      event.preventDefault();
+      void closeCase();
+    });
+
+    dialog.addEventListener('close', () => {
+      // Closed by a route that skipped the flight home (a second Esc the
+      // browser would not let us cancel, a remove mid-load): drop the case.
+      if (in3d()) controller?.abort();
+      delete dialog.dataset.mode;
+      record?.removeAttribute('style');
+    });
+
+    flipButton?.addEventListener('click', () => controller?.flip());
+
+    window.addEventListener('resize', () => {
+      if (!dialog.open || !in3d()) return;
+      placeRecord();
+      controller?.resize();
     });
 
     removeButton?.addEventListener('click', async () => {
@@ -329,6 +441,7 @@ const allFull =
         return;
       }
 
+      if (in3d()) await controller?.dismiss();
       slot.remove();
       dialog.close();
       refresh();
@@ -352,6 +465,7 @@ const allFull =
       if (film.director) slot.dataset.director = film.director;
       if (film.overview) slot.dataset.overview = film.overview;
       if (film.poster_path) slot.dataset.poster = film.poster_path;
+      slot.dataset.case = toCaseJson(film);
       slot.style.setProperty('--spine', safeSpineColor(film.spine_color));
       slot.style.setProperty('--w', `${spineWidth(film.id)}px`);
       slot.querySelector('.spine')?.classList.toggle('dark', film.spine_dark);
@@ -799,7 +913,7 @@ const allFull =
 
     bookcase.addEventListener('click', (event) => {
       const slot = (event.target as HTMLElement).closest<HTMLElement>('.slot');
-      if (slot) openCase(slot);
+      if (slot) void openSlot(slot);
     });
   }
 </script>

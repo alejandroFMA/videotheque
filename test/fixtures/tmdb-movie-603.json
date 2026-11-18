@@ -8,12 +8,41 @@
   "runtime": 136,
   "credits": {
     "cast": [
-      { "name": "Keanu Reeves", "character": "Neo" }
+      { "name": "Keanu Reeves", "character": "Neo" },
+      { "name": "Laurence Fishburne", "character": "Morpheus" },
+      { "name": "Carrie-Anne Moss", "character": "Trinity" },
+      { "name": "Hugo Weaving", "character": "Agent Smith" },
+      { "name": "Gloria Foster", "character": "Oracle" },
+      { "name": "Joe Pantoliano", "character": "Cypher" },
+      { "name": "Marcus Chong", "character": "Tank" }
     ],
     "crew": [
       { "job": "Director", "name": "Lana Wachowski", "department": "Directing" },
       { "job": "Director", "name": "Lilly Wachowski", "department": "Directing" },
-      { "job": "Producer", "name": "Joel Silver", "department": "Production" }
+      { "job": "Producer", "name": "Joel Silver", "department": "Production" },
+      { "job": "Screenplay", "name": "Lana Wachowski", "department": "Writing" },
+      { "job": "Screenplay", "name": "Lilly Wachowski", "department": "Writing" },
+      { "job": "Original Music Composer", "name": "Don Davis", "department": "Sound" },
+      { "job": "Director of Photography", "name": "Bill Pope", "department": "Camera" },
+      { "job": "Editor", "name": "Zach Staenberg", "department": "Editing" },
+      { "job": "Producer", "name": "Joel Silver", "department": "Production" },
+      { "job": "Producer", "name": "Bruce Berman", "department": "Production" },
+      { "job": "Producer", "name": "Barrie M. Osborne", "department": "Production" }
     ]
-  }
+  },
+  "images": {
+    "backdrops": [
+      { "file_path": "/en-poster-like.jpg", "iso_639_1": "en", "vote_count": 40 },
+      { "file_path": "/scene-a.jpg", "iso_639_1": null, "vote_count": 12 },
+      { "file_path": "/scene-b.jpg", "iso_639_1": null, "vote_count": 30 },
+      { "file_path": "/scene-c.jpg", "iso_639_1": null, "vote_count": 2 },
+      { "file_path": "/scene-d.jpg", "iso_639_1": null, "vote_count": 20 }
+    ]
+  },
+  "production_companies": [
+    { "id": 79, "name": "Village Roadshow Pictures", "logo_path": "/village.png" },
+    { "id": 372, "name": "Groucho II Film Partnership", "logo_path": null },
+    { "id": 1885, "name": "Silver Pictures", "logo_path": "/silver.png" },
+    { "id": 174, "name": "Warner Bros. Pictures", "logo_path": "/wb.png" }
+  ]
 }

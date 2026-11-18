@@ -56,6 +56,9 @@ Four tables, normalised from the start. Full SQL with policies lives in
 
 - `films`: global TMDB cache. Primary key is the TMDB id. Filled the first time
   anyone adds that film, written by that user's browser with the anon key.
+  `backdrop_paths`, `cast_names`, `crew` and `companies` feed the back of the
+  3D case; rows cached before they existed are filled once by
+  `scripts/backfill-film-details.ts`, run locally with the service-role key.
 - `shelves`: a user owns one or more themed shelves; sign-up seeds the first.
   `name` labels a shelf, `accent_color` tints it, `slug` drives the public URL,
   `is_public` controls access without a session. The 20-films-per-shelf cap is
@@ -126,9 +129,11 @@ extraction, the pull-out animation, the search box. Treat it as an interface
 reference, not as code to lift verbatim.
 
 The shelf is ported: `src/components/Bookcase.astro` draws it for both the
-owner (`/`) and a visitor (`/u/<handle>`). The pulled-out case is the static
-view the visual spec names as its no-WebGL fallback; the Three.js case is not
-built yet.
+owner (`/`) and a visitor (`/u/<handle>`). The pulled-out case is a Three.js
+VHS case (`src/lib/case-scene.ts`, loaded on the first open) that flies out of
+its slot and turns to show a 90s back cover; the static view in
+`FilmCase.astro` stays as the no-WebGL fallback. See
+`docs/superpowers/specs/2026-11-16-3d-film-case-design.md`.
 
 ## Constraints
 

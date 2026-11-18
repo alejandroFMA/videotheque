@@ -207,7 +207,9 @@ describe('fetchTmdbMovie', () => {
 
     expect(movie.id).toBe(movieFixture.id);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://api.themoviedb.org/3/movie/603?append_to_response=credits');
+    expect(url).toBe(
+      'https://api.themoviedb.org/3/movie/603?append_to_response=credits%2Cimages&include_image_language=null',
+    );
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer test-token');
   });
 

@@ -26,6 +26,8 @@ emoji.
 
 ## 2. Move films between shelves
 
+**Status:** done, 2026-11-12 (PR #21).
+
 **Goal:** organise the whole library freely, not just one shelf at a time.
 
 Drag-to-reorder already works within a shelf (`Bookcase.astro`,
@@ -42,7 +44,22 @@ Build the Three.js case described in
 current static case stays as the no-WebGL fallback. Check touch
 interaction on mobile before closing the step.
 
-## 4. Visual touches
+## 4. Critic's verdict on the case back
+
+**Goal:** the back of the case carries a press quote, the way 90s video
+sleeves did.
+
+Between the synopsis and the billing block, show one critic's verdict with
+its stars, for films rated four or five. The Guardian Open Platform is the
+only public API found with both parts: a review headline that reads as a
+verdict and a `starRating` out of five, with the critic's byline. It is
+English-only and does not cover every film, and it needs a free
+non-commercial key plus a link back to the review. OMDb's Rotten Tomatoes
+percentage can stand beside it as a separate badge. Quotes are only ever
+real ones: a film with no qualifying review shows no quote. FilmAffinity
+and the Spanish press have no API, so they are out.
+
+## 5. Visual touches
 
 **Goal:** small details that make the shelf feel finished.
 
@@ -51,7 +68,7 @@ interaction on mobile before closing the step.
 - A subtle glow on the case edges as a film is lifted. It comes after step
   3 because it depends on how the lift animation ends up.
 
-## 5. Films in Spanish
+## 6. Films in Spanish
 
 **Goal:** the shelf reads in the language of its users.
 
@@ -60,21 +77,21 @@ English. Request `es-ES` server-side, for both the synopsis and the title,
 which is also what the spine draws. Refetch the films already in the
 `films` cache so that existing shelves switch over too.
 
-## 6. Settings: avatar and display name
+## 7. Settings: avatar and display name
 
 **Goal:** users can make their profile their own.
 
 A settings view to change the avatar and the display name shown in the
 header.
 
-## 7. Custom background
+## 8. Custom background
 
 **Goal:** each user can set the room their shelf stands in.
 
 Let users pick a solid colour or an image as the background, like a
 desktop wallpaper.
 
-## 8. Language selector (English)
+## 9. Language selector (English)
 
 **Goal:** a second language for the interface and the film data.
 

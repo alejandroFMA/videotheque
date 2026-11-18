@@ -1,5 +1,5 @@
 ---
-import { CASE_CLOSE, CASE_REMOVE } from '../constants';
+import { CASE_CLOSE, CASE_FLIP, CASE_REMOVE } from '../constants';
 
 interface Props {
   editable: boolean;
@@ -14,6 +14,11 @@ const { editable } = Astro.props;
      bookcase script from the spine that was clicked — never from TMDB. */
 }
 <dialog id="film-case" aria-labelledby="case-title">
+  {
+    /* The Three.js case mounts its canvas here; data-mode="3d" on the dialog
+      hides the static box below and floats the record beside the case. */
+  }
+  <div id="case-layer" class="layer"></div>
   <div class="case">
     <div class="box">
       <span class="box-spine" aria-hidden="true"><span id="case-spine-title"></span></span>
@@ -33,6 +38,7 @@ const { editable } = Astro.props;
             </button>
           )
         }
+        <button type="button" id="case-flip" class="flip">{CASE_FLIP}</button>
         <button type="button" id="case-close" class="close">{CASE_CLOSE}</button>
       </div>
     </div>
@@ -217,6 +223,56 @@ const { editable } = Astro.props;
     }
   }
 
+  .layer,
+  .flip {
+    display: none;
+  }
+
+  /* The 3D case: a full-viewport canvas under a floating record. The record's
+     box is placed from script (caseLayout), so it follows the case. */
+  dialog[data-mode='3d'] .layer {
+    display: block;
+    position: fixed;
+    inset: 0;
+    touch-action: none;
+  }
+
+  dialog[data-mode='3d'] .layer :global(canvas) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+
+  /* No transform or zoom on the record's ancestor, or `position: fixed`
+     would be relative to it instead of the viewport. */
+  dialog[data-mode='3d'] .case {
+    display: block;
+    animation: none;
+    zoom: 1;
+  }
+
+  dialog[data-mode='3d'] .box,
+  dialog[data-mode='3d'] #case-overview {
+    display: none;
+  }
+
+  dialog[data-mode='3d'] .flip {
+    display: inline-block;
+  }
+
+  dialog[data-mode='3d'] .record {
+    position: fixed;
+    z-index: 1;
+    max-width: none;
+    animation: arrive 260ms ease 650ms backwards;
+  }
+
+  dialog[data-mode='3d'] .record.narrow {
+    overflow-y: auto;
+    padding-bottom: 24px;
+  }
+
   @media (max-width: 760px) {
     dialog[open] {
       place-items: start center;
@@ -264,6 +320,7 @@ const { editable } = Astro.props;
 
   @media (prefers-reduced-motion: reduce) {
     dialog[open],
+    dialog[data-mode='3d'] .record,
     .case {
       animation: none;
     }

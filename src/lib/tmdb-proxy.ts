@@ -35,7 +35,9 @@ function buildUpstreamUrl(op: 'search' | 'movie', params: URLSearchParams): stri
   const id = params.get('id') ?? '';
   if (!/^\d+$/.test(id) || Number(id) <= 0) return null;
   const u = new URL(`${TMDB_BASE}/movie/${id}`);
-  u.searchParams.set('append_to_response', 'credits');
+  u.searchParams.set('append_to_response', 'credits,images');
+  // Textless backdrops only: the back cover frames them as scenes.
+  u.searchParams.set('include_image_language', 'null');
   return u.toString();
 }
 
