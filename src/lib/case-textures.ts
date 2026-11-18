@@ -76,13 +76,15 @@ function gradient(
   return g;
 }
 
+/** Never rejects: a font that fails to load only means the canvas falls back
+ *  to the stack's next face, which must not hold the case. */
 export async function loadCaseFonts(): Promise<void> {
   await Promise.all([
     document.fonts.load(`700 40px ${FONT_SPINE}`),
     document.fonts.load(`800 40px ${FONT_DISPLAY}`),
     document.fonts.load(`400 20px ${FONT_UI}`),
     document.fonts.load(`700 20px ${FONT_UI}`),
-  ]);
+  ]).catch(() => undefined);
 }
 
 /** The same cardboard sleeve as `.spine` in Spine.astro, title running down it. */
