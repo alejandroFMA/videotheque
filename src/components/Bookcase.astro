@@ -348,6 +348,9 @@ const allFull =
 
     const closeCase = async () => {
       if (!in3d()) return dialog.close();
+      // Still loading: nothing is out to fly home, and the `close` listener
+      // aborts the open.
+      if (controller?.loading) return dialog.close();
       if (!controller || controller.busy) return;
       await controller.close();
       dialog.close();

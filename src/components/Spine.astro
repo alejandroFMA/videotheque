@@ -96,8 +96,10 @@ const { film } = Astro.props;
     text-transform: uppercase;
   }
 
+  /* :focus-visible, not :focus-within: closing the case hands focus back to
+     the spine that opened it, which must not stay lifted after a mouse click. */
   .slot:hover,
-  .slot:focus-within {
+  .slot:has(.spine:focus-visible) {
     transform: translateY(-9px);
   }
 

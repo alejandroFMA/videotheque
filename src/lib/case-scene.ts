@@ -54,6 +54,9 @@ export interface CaseController {
   /** True while an animation runs or while no case is fully out yet (still
    *  loading, or already closed): the moments a close or a flip must wait. */
   readonly busy: boolean;
+  /** True between open() and the case appearing, while its images load:
+   *  there is nothing to fly home yet, so a close can just abort. */
+  readonly loading: boolean;
 }
 
 /** Set on the slot while its case is out, so the DOM spine hides. */
@@ -151,12 +154,13 @@ const withoutRepeats = (scenes: HTMLImageElement[]) =>
 const imageCache = new Map<string, Promise<HTMLImageElement | null>>();
 
 /** Resolves to null on error or after IMAGE_TIMEOUT_MS: a missing image only
- *  degrades the back, it never holds the case. */
+ *  degrades the back, it never holds the case. A miss is not cached, so the
+ *  next open tries again once the network recovers. */
 function loadImage(url: string | null): Promise<HTMLImageElement | null> {
   if (!url) return Promise.resolve(null);
   let pending = imageCache.get(url);
   if (!pending) {
-    pending = new Promise((resolve) => {
+    pending = new Promise<HTMLImageElement | null>((resolve) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       const timer = setTimeout(() => resolve(null), IMAGE_TIMEOUT_MS);
@@ -169,6 +173,9 @@ function loadImage(url: string | null): Promise<HTMLImageElement | null> {
         resolve(null);
       };
       img.src = url;
+    }).then((img) => {
+      if (!img) imageCache.delete(url);
+      return img;
     });
     imageCache.set(url, pending);
   }
@@ -205,7 +212,11 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
   const canvas = renderer.domElement;
 
   const scene = new THREE.Scene();
-  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment()).texture;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const room = new RoomEnvironment();
+  scene.environment = pmrem.fromScene(room).texture;
+  room.dispose();
+  pmrem.dispose();
   scene.environmentIntensity = ENV_INTENSITY;
 
   const camera = new THREE.PerspectiveCamera(FOV_DEG, 1, CAMERA_NEAR, CAMERA_FAR);
@@ -239,6 +250,8 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
   let pose: Pose | null = null;
   let slot: HTMLElement | null = null;
   let busy = false;
+  /** The viewport changed mid-tween: recentre the case when it ends. */
+  let relayout = false;
   let drag: { x: number; ry: number; moved: boolean; onCase: boolean } | null = null;
   let tween: { start: number; ms: number; step: (t: number) => void; done: () => void } | null =
     null;
@@ -291,11 +304,23 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
     renderer.render(scene, camera);
   };
 
+  const recentre = () => {
+    if (!pose) return;
+    const vp = viewport();
+    pose = centrePose(caseLayout(vp), vp, pose.ry);
+  };
+
   const run = (ms: number, step: (t: number) => void) =>
     new Promise<void>((resolve) => {
       busy = true;
       const done = () => {
         busy = false;
+        // A tween aims at the layout it started from; one that ran through a
+        // resize lands off-centre until the case is placed again.
+        if (relayout) {
+          relayout = false;
+          recentre();
+        }
         resolve();
       };
       if (reducedMotion.matches || ms === 0) {
@@ -399,6 +424,10 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
   return {
     get busy() {
       return busy || !pose;
+    },
+
+    get loading() {
+      return slot !== null && !pose;
     },
 
     async open(target) {
@@ -528,10 +557,10 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
     abort,
 
     resize() {
-      if (!pose || busy) return;
+      if (!pose) return;
       fit();
-      const vp = viewport();
-      pose = centrePose(caseLayout(vp), vp, pose.ry);
+      if (busy) relayout = true;
+      else recentre();
     },
   };
 }

@@ -26,7 +26,11 @@ const { editable } = Astro.props;
     </div>
 
     <div class="record">
-      <h2 id="case-title"></h2>
+      {
+        /* showModal() would otherwise focus the first button, the remove: a
+           stray Enter would take the film off, and Esc would ring it. */
+      }
+      <h2 id="case-title" tabindex="-1" autofocus></h2>
       <p id="case-meta" class="meta"></p>
       <p id="case-overview" class="overview"></p>
       <p id="case-error" class="error" role="alert"></p>
@@ -159,6 +163,11 @@ const { editable } = Astro.props;
     font-weight: 700;
     line-height: 1.12;
     text-wrap: balance;
+  }
+
+  /* Focused only to land the dialog's focus somewhere inert, not to be used. */
+  h2:focus {
+    outline: none;
   }
 
   .meta {
