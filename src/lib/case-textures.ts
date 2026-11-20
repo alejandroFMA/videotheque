@@ -67,8 +67,8 @@ const SPINE_TITLE_TRACKING = 0.045;
 const EDGE_SHADE = 0.18;
 const THUMB_RULE = 5;
 // The thumbnail's frame contrasts with the spine: paper on dark, ink on light.
-const THUMB_FRAME_ON_DARK = 'rgba(0,0,0,0.6)';
-const THUMB_FRAME_ON_LIGHT = 'rgba(255,255,255,0.85)';
+const THUMB_FRAME_ON_DARK = 'rgba(255,255,255,0.85)';
+const THUMB_FRAME_ON_LIGHT = 'rgba(0,0,0,0.6)';
 
 function canvas(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
