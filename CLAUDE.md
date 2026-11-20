@@ -57,8 +57,13 @@ Four tables, normalised from the start. Full SQL with policies lives in
 - `films`: global TMDB cache. Primary key is the TMDB id. Filled the first time
   anyone adds that film, written by that user's browser with the anon key.
   `backdrop_paths`, `cast_names`, `crew` and `companies` feed the back of the
-  3D case; rows cached before they existed are filled once by
-  `scripts/backfill-film-details.ts`, run locally with the service-role key.
+  3D case. `rt_score` and `imdb_rating` feed the score stickers on its
+  front, looked up from OMDb server-side when a film is first cached
+  (`src/lib/scores-lookup.ts`, key `OMDB_API_KEY`); `scores_checked_at`
+  stays null until OMDb has answered, so a missing key or a failed call is
+  retried. Rows missing either group are filled by
+  `node --env-file=.env scripts/backfill-film-details.ts`, run locally; it
+  writes through `psql` with `SUPABASE_DB_PASSWORD`, no service-role key.
 - `shelves`: a user owns one or more themed shelves; sign-up seeds the first.
   `name` labels a shelf, `accent_color` tints it, `slug` drives the public URL,
   `is_public` controls access without a session. The 20-films-per-shelf cap is

@@ -7,8 +7,12 @@ import {
   sceneFrames,
   sceneSources,
   toCaseJson,
+  imdbSticker,
+  rtSticker,
+  rtVerdict,
   wrapItems,
 } from '../src/lib/case-details';
+import { EMPTY_SCORES } from '../src/lib/scores';
 import { CASE_AND, CASE_CREW_LABELS, CASE_DIRECTED_BY } from '../src/constants';
 
 const row = {
@@ -16,7 +20,11 @@ const row = {
   cast_names: ['Sigourney Weaver', 'Tom Skerritt'],
   crew: [{ job: 'music' as const, names: ['Jerry Goldsmith'] }],
   companies: [{ name: 'Brandywine', logo_path: null }],
+  ...EMPTY_SCORES,
+  rt_score: 98,
+  imdb_rating: 8.5,
 };
+const NO_SCORES = { rt: null, imdb: null };
 
 describe('parseCaseDetails', () => {
   it('round-trips through the slot attribute', () => {
@@ -25,7 +33,24 @@ describe('parseCaseDetails', () => {
       cast: row.cast_names,
       crew: row.crew,
       companies: row.companies,
+      scores: { rt: 98, imdb: 8.5 },
     });
+  });
+
+  it('reads a slot written before the scores existed as no scores', () => {
+    expect(parseCaseDetails('{"cast":["A"]}').scores).toEqual(NO_SCORES);
+    expect(EMPTY_DETAILS.scores).toEqual(NO_SCORES);
+  });
+
+  it('drops scores that are out of range or the wrong type', () => {
+    expect(parseCaseDetails(JSON.stringify({ scores: { rt: '94', imdb: 11 } })).scores).toEqual(
+      NO_SCORES,
+    );
+  });
+
+  it('reads an IMDb rating PostgREST returned as a string', () => {
+    const json = toCaseJson({ ...row, imdb_rating: '8.5' as unknown as number });
+    expect(parseCaseDetails(json).scores.imdb).toBe(8.5);
   });
 
   it('falls back to empty details for a film cached before the backfill', () => {
@@ -136,5 +161,25 @@ describe('distinctScenes', () => {
 
   it('keeps scenes that differ enough and ones it could not sample', () => {
     expect(distinctScenes([flat(0), null, flat(30)], 22)).toEqual([0, 1, 2]);
+  });
+});
+
+describe('sticker text', () => {
+  it('prints the Tomatometer with a narrow no-break space before the percent sign', () => {
+    expect(rtSticker(94)).toBe('94\u202F%');
+  });
+
+  it('prints the IMDb rating with a decimal comma and one decimal', () => {
+    expect(imdbSticker(7.8)).toBe('7,8');
+    expect(imdbSticker(8)).toBe('8,0');
+  });
+});
+
+describe('rtVerdict', () => {
+  it('calls 60 % and up fresh, as Rotten Tomatoes does, and anything lower rotten', () => {
+    expect(rtVerdict(60)).toBe('fresh');
+    expect(rtVerdict(100)).toBe('fresh');
+    expect(rtVerdict(59)).toBe('rotten');
+    expect(rtVerdict(0)).toBe('rotten');
   });
 });

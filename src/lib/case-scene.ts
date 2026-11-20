@@ -25,6 +25,7 @@ import {
 import {
   backCanvas,
   edgeCanvas,
+  frontCanvas,
   loadCaseFonts,
   sideCanvas,
   spineCanvas,
@@ -109,7 +110,6 @@ const SHADOW_PLANE_SIZE = 80;
 const SHADOW_DISTANCE = 0.14;
 const ROUGHNESS = 0.6;
 const CLEARCOAT_ROUGHNESS = 0.12;
-const POSTER_RATIO = 2 / 3;
 const CAMERA_NEAR = 0.1;
 const CAMERA_FAR = 100;
 const WHITE = 0xffffff;
@@ -449,12 +449,7 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
       const [posterImg] = await Promise.all([poster, loadCaseFonts()]);
       if (ticket !== generation) return;
 
-      const front = posterImg ? toTexture(posterImg) : null;
-      if (front) {
-        // Crop the 2:3 poster to the sleeve's narrower front.
-        front.repeat.x = CASE_WIDTH / POSTER_RATIO;
-        front.offset.x = (1 - front.repeat.x) / 2;
-      }
+      const front = posterImg ? toTexture(frontCanvas(posterImg, details.scores)) : null;
       const images: CaseImages = { poster: posterImg, backdrops: [], logos: [] };
       const edge = toTexture(edgeCanvas(film));
       mesh = new THREE.Mesh(new THREE.BoxGeometry(CASE_WIDTH, 1, CASE_DEPTH), [

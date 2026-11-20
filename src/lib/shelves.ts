@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FilmRow } from './tmdb-mapping';
+import type { ScoreFields } from './scores';
 import type { ShelfSlot } from './shelf-target';
 
 type Db = Pick<SupabaseClient, 'from' | 'rpc'>;
@@ -15,7 +16,7 @@ export interface SpineColour {
   spine_dark: boolean;
 }
 
-export interface FilmRecord extends FilmRow, SpineColour {
+export interface FilmRecord extends FilmRow, ScoreFields, SpineColour {
   fetched_at: string;
 }
 
@@ -100,12 +101,20 @@ export async function shelfHasFilm(sb: Db, shelfId: string, filmId: number): Pro
   return data !== null;
 }
 
+/** Whether the global cache already holds the film, so the add can skip the
+ *  scores lookup: a cached row is only ever refilled by the backfill. */
+export async function filmIsCached(sb: Db, filmId: number): Promise<boolean> {
+  const { data, error } = await sb.from('films').select('id').eq('id', filmId).maybeSingle();
+  if (error) fail('filmIsCached', error);
+  return data !== null;
+}
+
 /** `ignoreDuplicates` lets two tabs race harmlessly: the first-written spine
  *  colour wins and is never recomputed, so an empty insert result means the row
  *  must be read back rather than overwritten. */
 export async function ensureFilmCached(
   sb: Db,
-  row: FilmRow,
+  row: FilmRow & ScoreFields,
   spine: SpineColour,
 ): Promise<{ film: FilmRecord; created: boolean }> {
   const { data: insertedRows, error: insertError } = await sb

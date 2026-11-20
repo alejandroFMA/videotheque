@@ -4,8 +4,26 @@
  * Values come from the spike the owner signed off; see
  * docs/superpowers/specs/2026-11-16-3d-film-case-design.md.
  */
-import { CASE_AND, CASE_CREW_LABELS, CASE_DIRECTED_BY, CASE_FORMAT, WORDMARK } from '../constants';
-import { crewLines, sceneFrames, sceneSources, wrapItems, type CaseDetails } from './case-details';
+import {
+  CASE_AND,
+  CASE_CREW_LABELS,
+  CASE_DIRECTED_BY,
+  CASE_FORMAT,
+  STICKER_IMDB_LABEL,
+  WORDMARK,
+} from '../constants';
+import {
+  crewLines,
+  imdbSticker,
+  rtSticker,
+  rtVerdict,
+  sceneFrames,
+  sceneSources,
+  wrapItems,
+  type CaseDetails,
+  type CaseScores,
+  type RtVerdict,
+} from './case-details';
 import { CASE_WIDTH } from './case-pose';
 
 export interface CaseFilm {
@@ -252,6 +270,7 @@ const BACK = {
   billingTracking: 2,
   billingSep: '   ',
   billingGap: 36,
+
   bottomRow: 170,
   barcode: { w: 250, h: 118, pad: 14, bars: 76, digits: 18 },
   logo: { maxH: 64, maxW: 170, gap: 36, tint: '#cfc9be', nameSize: 20 },
@@ -299,6 +318,268 @@ function tinted(img: HTMLImageElement, color: string, w: number, h: number): HTM
   ctx.globalCompositeOperation = 'source-in';
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
+const FRONT_HEIGHT = 1200;
+
+const STICKER = {
+  /** Diameter, as a share of the front's width. */
+  size: 0.27,
+  /** The white die-cut margin, as a share of the diameter. */
+  border: 0.035,
+  /** From the top-right corner, as a share of the front's width. */
+  inset: 0.05,
+  gap: 0.02,
+  /** Radians; the two lean opposite ways, as if stuck on by hand. */
+  tilt: [0.12, -0.08],
+  paper: '#fbf8f1',
+  // The tomato or splat names the source, so this one carries no label.
+  rt: { fill: '#e0453a', ink: '#fbf8f1', scale: 0.86, number: 0.27, label: 0 },
+  imdb: { fill: '#f2c230', ink: '#171412', scale: 0.86, number: 0.36, label: 0.14 },
+  labelTracking: 0.004,
+  /** The fresh/rotten mark beside the percentage, as a share of the diameter. */
+  /** Close to the value's cap height, so mark and figure read as a pair. */
+  icon: { size: 0.27, gap: 0.03 },
+  tomato: { red: '#e8432c', shade: '#a31f10', leaf: '#4f9a35' },
+  /** A pale rim so the tomato still reads on the red sticker. */
+  iconRim: { color: '#fbf8f1', width: 0.09 },
+  splat: { green: '#6c9a2a', shade: '#4d7419', lobes: 9, seed: 11 },
+  /** The label's widest line, as a share of the coloured disc's radius. */
+  labelRoom: 1.6,
+  /** The value's width, as a share of the coloured disc's radius. */
+  valueRoom: 1.6,
+  shadow: { color: 'rgba(0,0,0,0.45)', blur: 0.06, offset: 0.025 },
+  grain: { cell: 3, alpha: 0.07, seed: 7 },
+  sheen: 0.22,
+};
+
+// Procedural so no image asset ships: the same pseudo-random speckle each time.
+let grainTile: HTMLCanvasElement | null = null;
+function paperGrain(): HTMLCanvasElement {
+  if (grainTile) return grainTile;
+  const { cell, seed } = STICKER.grain;
+  const tileCells = 64;
+  const [c, ctx] = canvas(tileCells * cell, tileCells * cell);
+  let n = seed;
+  for (let y = 0; y < tileCells; y++) {
+    for (let x = 0; x < tileCells; x++) {
+      n = (n * BARCODE_SEED_MUL + BARCODE_SEED_ADD) % BARCODE_SEED_MOD;
+      const v = n / BARCODE_SEED_MOD;
+      ctx.fillStyle = v > 0.5 ? `rgba(255,255,255,${v - 0.5})` : `rgba(0,0,0,${0.5 - v})`;
+      ctx.fillRect(x * cell, y * cell, cell, cell);
+    }
+  }
+  grainTile = c;
+  return c;
+}
+
+type StickerStyle = { fill: string; ink: string; scale: number; number: number; label: number };
+
+/** Our own tomato, not Rotten Tomatoes' artwork: a red disc with a leafy calyx. */
+function drawTomato(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  const { red, shade, leaf } = STICKER.tomato;
+  ctx.save();
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+  g.addColorStop(0, red);
+  g.addColorStop(1, shade);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(x, y + r * 0.06, r, r * 0.92, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = STICKER.iconRim.color;
+  ctx.lineWidth = r * STICKER.iconRim.width * 2;
+  ctx.stroke();
+  ctx.fill();
+  ctx.fillStyle = leaf;
+  const leaves = 5;
+  for (let i = 0; i < leaves; i++) {
+    const a = -Math.PI / 2 + ((i - (leaves - 1) / 2) * Math.PI) / 5;
+    ctx.beginPath();
+    ctx.ellipse(
+      x + Math.cos(a) * r * 0.28,
+      y - r * 0.78 + Math.sin(a) * r * 0.12 + r * 0.12,
+      r * 0.3,
+      r * 0.1,
+      a,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Our own green splat for a rotten score: an irregular blob with droplets. */
+function drawSplat(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  const { green, shade, lobes, seed } = STICKER.splat;
+  ctx.save();
+  let n = seed;
+  const rand = () => {
+    n = (n * BARCODE_SEED_MUL + BARCODE_SEED_ADD) % BARCODE_SEED_MOD;
+    return n / BARCODE_SEED_MOD;
+  };
+  const g = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
+  g.addColorStop(0, green);
+  g.addColorStop(1, shade);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  for (let i = 0; i <= lobes * 2; i++) {
+    const a = (i / (lobes * 2)) * Math.PI * 2;
+    const rr = i % 2 ? r * (0.55 + rand() * 0.15) : r * (0.8 + rand() * 0.2);
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
+  for (let i = 0; i < 3; i++) {
+    const a = rand() * Math.PI * 2;
+    ctx.beginPath();
+    ctx.arc(
+      x + Math.cos(a) * r * 1.1,
+      y + Math.sin(a) * r * 1.1,
+      r * (0.08 + rand() * 0.07),
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawSticker(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  d: number,
+  tilt: number,
+  style: StickerStyle,
+  value: string,
+  label: string | null,
+  icon: RtVerdict | null,
+) {
+  const r = d / 2;
+  const inner = r * (1 - STICKER.border * 2);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(tilt);
+
+  ctx.save();
+  ctx.shadowColor = STICKER.shadow.color;
+  ctx.shadowBlur = d * STICKER.shadow.blur;
+  ctx.shadowOffsetX = d * STICKER.shadow.offset;
+  ctx.shadowOffsetY = d * STICKER.shadow.offset;
+  ctx.fillStyle = STICKER.paper;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = style.fill;
+  ctx.beginPath();
+  ctx.arc(0, 0, inner, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = style.ink;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  // A wide value ("100 %") or a long label shrinks to fit the coloured disc
+  // rather than spilling onto the border or being cut.
+  const fitText = (
+    text: string,
+    size: number,
+    tracking: number,
+    room: number,
+    y: number,
+    before = 0,
+  ) => {
+    setTracking(ctx, tracking);
+    ctx.font = `800 ${size}px ${FONT_DISPLAY}`;
+    let width = ctx.measureText(text).width;
+    const scale = Math.min(1, room / (width + before));
+    if (scale < 1) {
+      ctx.font = `800 ${size * scale}px ${FONT_DISPLAY}`;
+      width = ctx.measureText(text).width;
+    }
+    return { width, scale };
+  };
+
+  // The value, with the fresh/rotten mark before it when there is one; the
+  // pair is centred as a group and shrinks together when too wide.
+  const iconSize = icon ? d * STICKER.icon.size : 0;
+  const iconGap = icon ? d * STICKER.icon.gap : 0;
+  const numberSize = d * style.number;
+  // With no label under it, the value sits on the disc's centre line.
+  const valueY = label ? d * 0.08 : numberSize * 0.36;
+  const fitted = fitText(
+    value,
+    numberSize,
+    0,
+    inner * STICKER.valueRoom,
+    valueY,
+    iconSize + iconGap,
+  );
+  const iconW = (iconSize + iconGap) * fitted.scale;
+  const groupLeft = -(iconW + fitted.width) / 2;
+  if (icon) {
+    const r = (iconSize * fitted.scale) / 2;
+    const iconCentreY = valueY - numberSize * fitted.scale * 0.36;
+    if (icon === 'fresh') drawTomato(ctx, groupLeft + r, iconCentreY, r);
+    else drawSplat(ctx, groupLeft + r, iconCentreY, r);
+    ctx.fillStyle = style.ink;
+  }
+  ctx.textAlign = 'left';
+  ctx.fillText(value, groupLeft + iconW, valueY);
+  ctx.textAlign = 'center';
+
+  if (label) {
+    fitText(label, d * style.label, d * STICKER.labelTracking, inner * STICKER.labelRoom, d * 0.25);
+    ctx.fillText(label, 0, d * 0.25);
+  }
+
+  // Paper over everything, border included: grain, then a diagonal sheen.
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.globalAlpha = STICKER.grain.alpha;
+  ctx.fillStyle = ctx.createPattern(paperGrain(), 'repeat')!;
+  ctx.fillRect(-r, -r, d, d);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = gradient(
+    ctx,
+    [-r, -r, r, r],
+    [
+      [0, 'rgba(255,255,255,0)'],
+      [0.35, `rgba(255,255,255,${STICKER.sheen})`],
+      [0.5, 'rgba(255,255,255,0)'],
+      [1, 'rgba(0,0,0,0.08)'],
+    ],
+  );
+  ctx.fillRect(-r, -r, d, d);
+  ctx.restore();
+}
+
+/** The front: the poster cropped to the sleeve, with the score stickers stuck
+ *  on its top-right corner, Tomatometer above IMDb. */
+export function frontCanvas(poster: HTMLImageElement, scores: CaseScores): HTMLCanvasElement {
+  const [c, ctx] = canvas(FRONT_HEIGHT * CASE_WIDTH, FRONT_HEIGHT);
+  drawCover(ctx, poster, 0, 0, c.width, c.height);
+
+  const stickers = [
+    scores.rt === null
+      ? null
+      : ([STICKER.rt, rtSticker(scores.rt), null, rtVerdict(scores.rt)] as const),
+    scores.imdb === null
+      ? null
+      : ([STICKER.imdb, imdbSticker(scores.imdb), STICKER_IMDB_LABEL, null] as const),
+  ].filter((s) => s !== null);
+
+  const base = c.width * STICKER.size;
+  const right = c.width - c.width * STICKER.inset;
+  let top = c.width * STICKER.inset;
+  stickers.forEach(([style, value, label, icon], i) => {
+    const d = base * style.scale;
+    drawSticker(ctx, right - d / 2, top + d / 2, d, STICKER.tilt[i]!, style, value, label, icon);
+    top += d + c.width * STICKER.gap;
+  });
   return c;
 }
 

@@ -282,12 +282,18 @@ function addFilmFake({ count = 0, hasFilm = false, cached = false } = {}) {
         { data: hasFilm ? { film_id: 603 } : null, error: null },
         { data: null, error: null, count },
       ],
+      // films results in call order: filmIsCached, then ensureFilmCached's
+      // upsert (and its read-back when the row already existed).
       films: cached
         ? [
+            { data: { id: 603 }, error: null },
             { data: [], error: null },
             { data: filmRow, error: null },
           ]
-        : { data: [filmRow], error: null },
+        : [
+            { data: null, error: null },
+            { data: [filmRow], error: null },
+          ],
     },
     { place_film: { data: 5, error: null } },
   );
@@ -465,7 +471,7 @@ describe('handleAddFilm — happy path', () => {
       token: 't',
       fetch: tmdbOk(),
     });
-    const [, payload] = sb.opsFor('films').find(([op]) => op === 'upsert')!;
+    const [, payload] = sb.opsFor('films', 1).find(([op]) => op === 'upsert')!;
     expect(payload).toMatchObject({ title: movieFixture.title });
     expect(payload).not.toMatchObject({ director: 'Nobody' });
   });
@@ -821,5 +827,75 @@ describe('handleReorderShelves', () => {
     const { sb, res } = reorderShelvesRequest({ order: [OTHER_SHELF, SHELF] });
     expect((await res).status).toBe(204);
     expect(sb.rpc).toHaveBeenCalledWith('reorder_shelves', { p_order: [OTHER_SHELF, SHELF] });
+  });
+});
+
+describe('handleAddFilm — the score stickers', () => {
+  const OMDB = {
+    Response: 'True',
+    imdbRating: '8.7',
+    Ratings: [{ Source: 'Rotten Tomatoes', Value: '83%' }],
+  };
+
+  function routedFetch({ omdbOk = true } = {}) {
+    return vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const respond = (body: unknown, ok = true) => ({
+        ok,
+        status: ok ? 200 : 500,
+        json: async () => body,
+      });
+      if (url.includes('omdbapi')) return respond(OMDB, omdbOk);
+      return respond({ ...movieFixture, imdb_id: 'tt0133093' });
+    }) as unknown as typeof globalThis.fetch;
+  }
+
+  it('caches the scores with a new film', async () => {
+    const sb = addFilmFake();
+    const res = await handleAddFilm({
+      supabase: sb.client,
+      owner: OWNER,
+      shelfId: SHELF,
+      body: VALID_BODY,
+      token: 't',
+      fetch: routedFetch(),
+      omdbKey: 'o',
+    });
+    expect(res.status).toBe(201);
+    const [, payload] = sb.opsFor('films', 1).find(([op]) => op === 'upsert')!;
+    expect(payload).toMatchObject({ rt_score: 83, imdb_rating: 8.7 });
+    expect((payload as { scores_checked_at: string | null }).scores_checked_at).not.toBeNull();
+  });
+
+  it('still adds the film when OMDb fails', async () => {
+    const sb = addFilmFake();
+    const res = await handleAddFilm({
+      supabase: sb.client,
+      owner: OWNER,
+      shelfId: SHELF,
+      body: VALID_BODY,
+      token: 't',
+      fetch: routedFetch({ omdbOk: false }),
+      omdbKey: 'o',
+    });
+    expect(res.status).toBe(201);
+    const [, payload] = sb.opsFor('films', 1).find(([op]) => op === 'upsert')!;
+    expect(payload).toMatchObject({ rt_score: null, imdb_rating: null, scores_checked_at: null });
+  });
+
+  it('does not look the scores up again for a film already in the cache', async () => {
+    const sb = addFilmFake({ cached: true });
+    const fetchMock = routedFetch();
+    await handleAddFilm({
+      supabase: sb.client,
+      owner: OWNER,
+      shelfId: SHELF,
+      body: VALID_BODY,
+      token: 't',
+      fetch: fetchMock,
+      omdbKey: 'o',
+    });
+    const urls = vi.mocked(fetchMock).mock.calls.map(([u]) => String(u));
+    expect(urls.some((u) => u.includes('omdbapi'))).toBe(false);
   });
 });

@@ -1,5 +1,19 @@
 ---
-import { TMDB_ATTRIBUTION, TMDB_LOGO_ALT, TMDB_URL } from '../constants';
+import {
+  IMDB_CREDIT,
+  IMDB_URL,
+  OMDB_CREDIT,
+  OMDB_LICENSE,
+  OMDB_LICENSE_URL,
+  OMDB_URL,
+  RT_CREDIT,
+  RT_URL,
+  TMDB_ATTRIBUTION,
+  TMDB_LOGO_ALT,
+  TMDB_URL,
+} from '../constants';
+
+const external = { target: '_blank', rel: 'noopener noreferrer' };
 ---
 
 <footer>
@@ -7,6 +21,17 @@ import { TMDB_ATTRIBUTION, TMDB_LOGO_ALT, TMDB_URL } from '../constants';
     <img src="/tmdb-logo.svg" alt={TMDB_LOGO_ALT} width="104" height="14" />
   </a>
   <p>{TMDB_ATTRIBUTION}</p>
+  <p class="credits">
+    <a class="credit" href={OMDB_URL} {...external}>{OMDB_CREDIT}</a>{' ('}<a
+      class="credit"
+      href={OMDB_LICENSE_URL}
+      {...external}>{OMDB_LICENSE}</a
+    >{'). '}<a class="credit" href={IMDB_URL} {...external}>{IMDB_CREDIT}</a>{' '}<a
+      class="credit"
+      href={RT_URL}
+      {...external}>{RT_CREDIT}</a
+    >
+  </p>
 </footer>
 
 <style>
@@ -28,6 +53,18 @@ import { TMDB_ATTRIBUTION, TMDB_LOGO_ALT, TMDB_URL } from '../constants';
 
   a:hover {
     opacity: 1;
+  }
+
+  a.credit {
+    display: inline;
+    line-height: inherit;
+    color: inherit;
+    text-underline-offset: 2px;
+  }
+
+  /* The score credits read as one small paragraph under TMDB's line. */
+  .credits {
+    flex-basis: 100%;
   }
 
   img {
