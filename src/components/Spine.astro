@@ -103,6 +103,41 @@ const { film } = Astro.props;
     transform: translateY(-9px);
   }
 
+  /* The full title over a spine that clips it, read from the slot's own
+     data-title; the bookcase marks clipped slots. */
+  .slot.clipped:hover,
+  .slot.clipped:has(.spine:focus-visible) {
+    z-index: 2;
+  }
+
+  .slot.clipped:hover::after,
+  .slot.clipped:has(.spine:focus-visible)::after {
+    content: attr(data-title);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    width: max-content;
+    max-width: 220px;
+    padding: 5px 9px;
+    border-radius: 3px;
+    background: var(--ink);
+    color: var(--wall);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+    box-shadow: 0 2px 8px var(--wall-shadow);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  .slot:global(.placeholder)::after,
+  .slot:global(.drag-ghost)::after,
+  .slot:global(.case-out)::after {
+    content: none;
+  }
+
   /* Where the carried spine will land: its own slot, emptied to a gap. */
   .slot:global(.placeholder) {
     transform: none;

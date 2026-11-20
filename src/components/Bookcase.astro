@@ -291,6 +291,23 @@ const allFull =
       }
     };
 
+    // A clipped title gets its full-title label (Spine.astro). Slot widths
+    // change with the viewport, so this is re-measured on resize.
+    const markClipped = (root: ParentNode) => {
+      for (const slot of root.querySelectorAll<HTMLElement>('.slot[data-film-id]')) {
+        const title = slot.querySelector<HTMLElement>('.title');
+        slot.classList.toggle('clipped', !!title && title.scrollHeight > title.clientHeight);
+      }
+    };
+    markClipped(bookcase);
+    // The spine face may still be loading; its metrics decide what clips.
+    void document.fonts.ready.then(() => markClipped(bookcase));
+    let clipFrame = 0;
+    window.addEventListener('resize', () => {
+      cancelAnimationFrame(clipFrame);
+      clipFrame = requestAnimationFrame(() => markClipped(bookcase));
+    });
+
     // ---- the pulled-out case ------------------------------------------------
 
     let opened: HTMLElement | null = null;
@@ -476,6 +493,7 @@ const allFull =
       if (label) label.textContent = film.title;
 
       plank.append(slot);
+      markClipped(plank);
       refresh();
       slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });

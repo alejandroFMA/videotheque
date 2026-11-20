@@ -14,6 +14,7 @@ import {
 } from '../constants';
 import {
   crewLines,
+  spineLayout,
   imdbSticker,
   rtSticker,
   rtVerdict,
@@ -36,6 +37,12 @@ export interface CaseFilm {
   spineDark: boolean;
 }
 
+/** What the spine draws besides its title; either may be missing. */
+export interface SpineArt {
+  poster: HTMLImageElement | null;
+  logo: HTMLImageElement | null;
+}
+
 export interface CaseImages {
   poster: HTMLImageElement | null;
   backdrops: HTMLImageElement[];
@@ -55,12 +62,13 @@ const inkFor = (film: CaseFilm) => (film.spineDark ? INK_ON_DARK : INK_ON_LIGHT)
 const STRIP_WIDTH = 200;
 
 // The shelf spine is 172px tall with its title from 13px, clipped at 146px.
-const SPINE_REFERENCE_HEIGHT = 172;
-const SPINE_TITLE_TOP = 13;
-const SPINE_TITLE_MAX = 146;
 const SPINE_TITLE_SIZE = 0.37;
 const SPINE_TITLE_TRACKING = 0.045;
 const EDGE_SHADE = 0.18;
+const THUMB_RULE = 5;
+// The thumbnail's frame contrasts with the spine: paper on dark, ink on light.
+const THUMB_FRAME_ON_DARK = 'rgba(0,0,0,0.6)';
+const THUMB_FRAME_ON_LIGHT = 'rgba(255,255,255,0.85)';
 
 function canvas(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
@@ -105,8 +113,9 @@ export async function loadCaseFonts(): Promise<void> {
   ]).catch(() => undefined);
 }
 
-/** The same cardboard sleeve as `.spine` in Spine.astro, title running down it. */
-export function spineCanvas(film: CaseFilm, depth: number): HTMLCanvasElement {
+/** The same cardboard sleeve as `.spine` in Spine.astro, dressed as a 90s VHS
+ *  spine: poster thumbnail, title running down it, "VHS" mark, studio logo. */
+export function spineCanvas(film: CaseFilm, depth: number, art: SpineArt): HTMLCanvasElement {
   const w = STRIP_WIDTH;
   const h = w / depth;
   const [c, ctx] = canvas(w, h);
@@ -135,20 +144,40 @@ export function spineCanvas(film: CaseFilm, depth: number): HTMLCanvasElement {
   );
   ctx.fillRect(0, 0, w, h);
 
+  const ink = inkFor(film);
+  const layout = spineLayout(w, h, art.poster !== null, art.logo !== null);
+  if (art.poster && layout.thumb) {
+    const { left, top, width, height } = layout.thumb;
+    ctx.fillStyle = film.spineDark ? THUMB_FRAME_ON_DARK : THUMB_FRAME_ON_LIGHT;
+    ctx.fillRect(
+      left - THUMB_RULE,
+      top - THUMB_RULE,
+      width + THUMB_RULE * 2,
+      height + THUMB_RULE * 2,
+    );
+    drawCover(ctx, art.poster, left, top, width, height);
+  }
+
   const size = w * SPINE_TITLE_SIZE;
   ctx.font = `700 ${size}px ${FONT_SPINE}`;
   setTracking(ctx, size * SPINE_TITLE_TRACKING);
-  ctx.fillStyle = inkFor(film);
+  ctx.fillStyle = ink;
   ctx.textBaseline = 'middle';
   ctx.save();
-  ctx.translate(w / 2, (h * SPINE_TITLE_TOP) / SPINE_REFERENCE_HEIGHT);
+  ctx.translate(w / 2, layout.titleTop);
   ctx.rotate(Math.PI / 2);
-  ctx.fillText(
-    ellipsize(ctx, film.title.toUpperCase(), (h * SPINE_TITLE_MAX) / SPINE_REFERENCE_HEIGHT),
-    0,
-    0,
-  );
+  ctx.fillText(ellipsize(ctx, film.title.toUpperCase(), layout.titleMax), 0, 0);
   ctx.restore();
+
+  drawFormat(ctx, w / 2, layout.markMiddle, layout.markHeight, ink);
+
+  if (art.logo && layout.logo) {
+    const { top, maxWidth, maxHeight } = layout.logo;
+    const ratio = art.logo.naturalWidth / art.logo.naturalHeight;
+    const lw = Math.min(maxWidth, maxHeight * ratio);
+    const lh = lw / ratio;
+    ctx.drawImage(tinted(art.logo, ink, lw, lh), (w - lw) / 2, top + (maxHeight - lh) / 2);
+  }
   return c;
 }
 
@@ -259,7 +288,6 @@ const BACK = {
   band: 104,
   footStrip: 22,
   wordmark: { size: 46, tracking: 10 },
-  format: { height: 64, paddingX: 0.22, rule: 0.06 },
   scenesTop: 150,
   sceneGap: 34,
   frame: 7,
@@ -583,9 +611,18 @@ export function frontCanvas(poster: HTMLImageElement, scores: CaseScores): HTMLC
   return c;
 }
 
+// The mark's padding and rule, as shares of its height.
+const MARK = { paddingX: 0.22, rule: 0.06 };
+
 /** The format named in our own type, in a thin rule box: not the JVC logo. */
-function drawFormat(ctx: CanvasRenderingContext2D, right: number, middle: number, color: string) {
-  const { height, paddingX, rule } = BACK.format;
+function drawFormat(
+  ctx: CanvasRenderingContext2D,
+  centreX: number,
+  middle: number,
+  height: number,
+  color: string,
+) {
+  const { paddingX, rule } = MARK;
   ctx.save();
   ctx.font = `800 ${height * 0.78}px ${FONT_DISPLAY}`;
   setTracking(ctx, height * 0.08);
@@ -593,9 +630,10 @@ function drawFormat(ctx: CanvasRenderingContext2D, right: number, middle: number
   const boxW = ctx.measureText(CASE_FORMAT).width + height * paddingX * 2;
   ctx.strokeStyle = color;
   ctx.lineWidth = height * rule;
-  ctx.strokeRect(right - boxW, middle - height / 2, boxW, height);
+  const left = centreX - boxW / 2;
+  ctx.strokeRect(left, middle - height / 2, boxW, height);
   ctx.fillStyle = color;
-  ctx.fillText(CASE_FORMAT, right - boxW + height * paddingX, middle + height * 0.04);
+  ctx.fillText(CASE_FORMAT, left + height * paddingX, middle + height * 0.04);
   ctx.restore();
 }
 
@@ -642,7 +680,6 @@ export function backCanvas(
   ctx.font = `800 ${BACK.wordmark.size}px ${FONT_DISPLAY}`;
   setTracking(ctx, BACK.wordmark.tracking);
   ctx.fillText(WORDMARK.toUpperCase(), pad, BACK.band / 2 + 2);
-  drawFormat(ctx, cw - pad, BACK.band / 2, ink);
 
   // Without backdrops the poster stands in; with neither there are no scenes
   // and the text moves up.
