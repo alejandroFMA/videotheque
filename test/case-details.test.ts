@@ -11,7 +11,10 @@ import {
   rtSticker,
   rtVerdict,
   wrapItems,
+  firstLoaded,
+  spineLayout,
 } from '../src/lib/case-details';
+import { CASE_DEPTH } from '../src/lib/case-pose';
 import { EMPTY_SCORES } from '../src/lib/scores';
 import { CASE_AND, CASE_CREW_LABELS, CASE_DIRECTED_BY } from '../src/constants';
 
@@ -181,5 +184,61 @@ describe('rtVerdict', () => {
     expect(rtVerdict(100)).toBe('fresh');
     expect(rtVerdict(59)).toBe('rotten');
     expect(rtVerdict(0)).toBe('rotten');
+  });
+});
+
+describe('spineLayout', () => {
+  const W = 200;
+  const H = W / CASE_DEPTH;
+
+  it('without thumbnail starts the title where the spine does today', () => {
+    const l = spineLayout(W, H, false, false);
+    expect(l.thumb).toBeNull();
+    expect(l.titleTop).toBeCloseTo((H * 13) / 172);
+  });
+
+  it('starts the title below the thumbnail', () => {
+    const l = spineLayout(W, H, true, true);
+    expect(l.titleTop).toBeGreaterThan(l.thumb!.top + l.thumb!.height);
+  });
+
+  it('keeps the thumbnail inside the strip width', () => {
+    const l = spineLayout(W, H, true, false);
+    expect(l.thumb!.left).toBeGreaterThan(0);
+    expect(l.thumb!.left + l.thumb!.width).toBeLessThan(W);
+  });
+
+  it('ends the title above the VHS mark', () => {
+    for (const [thumb, logo] of [
+      [false, false],
+      [true, false],
+      [false, true],
+      [true, true],
+    ] as const) {
+      const l = spineLayout(W, H, thumb, logo);
+      expect(l.titleTop + l.titleMax).toBeLessThan(l.markMiddle - l.markHeight / 2);
+    }
+  });
+
+  it('puts the logo below the mark and inside the strip', () => {
+    const l = spineLayout(W, H, true, true);
+    expect(l.logo!.top).toBeGreaterThan(l.markMiddle + l.markHeight / 2);
+    expect(l.logo!.top + l.logo!.maxHeight).toBeLessThan(H);
+    expect(l.logo!.maxWidth).toBeLessThan(W);
+  });
+
+  it('reserves no logo room without a logo', () => {
+    const withLogo = spineLayout(W, H, true, true);
+    const without = spineLayout(W, H, true, false);
+    expect(without.logo).toBeNull();
+    expect(without.markMiddle).toBeGreaterThan(withLogo.markMiddle);
+  });
+});
+
+describe('firstLoaded', () => {
+  it('returns the first non-null entry, or null', () => {
+    expect(firstLoaded([null, 'a', 'b'])).toBe('a');
+    expect(firstLoaded([null, null])).toBeNull();
+    expect(firstLoaded([])).toBeNull();
   });
 });
