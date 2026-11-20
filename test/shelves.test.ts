@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fakeSupabase } from './helpers/fake-supabase';
+import { EMPTY_SCORES } from '../src/lib/scores';
 import {
   countOwnShelves,
   createShelf,
@@ -35,6 +36,7 @@ const FILM_ROW = {
   cast_names: [],
   crew: [],
   companies: [],
+  ...EMPTY_SCORES,
 };
 const SPINE = { spine_color: 'hsl(210 42% 40%)', spine_dark: true };
 

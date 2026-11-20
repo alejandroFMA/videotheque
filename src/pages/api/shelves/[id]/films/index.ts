@@ -12,4 +12,5 @@ export const POST: APIRoute = async ({ locals, params, request }) =>
     body: await readJson(request),
     token: getSecret('TMDB_ACCESS_TOKEN'),
     fetch,
+    omdbKey: getSecret('OMDB_API_KEY'),
   });

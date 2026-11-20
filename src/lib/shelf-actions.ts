@@ -14,6 +14,7 @@ import {
   createShelf,
   deleteShelf,
   ensureFilmCached,
+  filmIsCached,
   findOwnShelf,
   moveFilm,
   placeFilm,
@@ -28,6 +29,8 @@ import {
 } from './shelves';
 import { fetchTmdbMovie, TmdbUnavailableError } from './tmdb-proxy';
 import { toFilmRow } from './tmdb-mapping';
+import { EMPTY_SCORES } from './scores';
+import { lookupScores } from './scores-lookup';
 import { SPINE_COLOR_PATTERN } from './spine';
 import { LABEL_MAX_LENGTH, SHELF_CAPACITY, SHELF_FULL_MESSAGE } from '../constants';
 import { parsePostitColor } from './postit';
@@ -142,6 +145,8 @@ export interface AddFilmContext {
   body: unknown;
   token: string | undefined;
   fetch: typeof globalThis.fetch;
+  /** Absent means no scores lookup, as when the key is not configured. */
+  omdbKey?: string;
 }
 
 interface AddFilmRequest {
@@ -192,7 +197,14 @@ export async function handleAddFilm(ctx: AddFilmContext): Promise<Response> {
     // Only the spine colour is taken from the browser: the films cache is
     // global, so one client's bad row would reach every shelf.
     const movie = await fetchTmdbMovie(request.tmdbId, ctx.token, ctx.fetch);
-    const { film, created } = await ensureFilmCached(ctx.supabase, toFilmRow(movie), request.spine);
+    const scores = (await filmIsCached(ctx.supabase, request.tmdbId))
+      ? EMPTY_SCORES
+      : await lookupScores(movie, ctx.omdbKey, ctx.fetch);
+    const { film, created } = await ensureFilmCached(
+      ctx.supabase,
+      { ...toFilmRow(movie), ...scores },
+      request.spine,
+    );
     const position = await placeFilm(ctx.supabase, guard.id, request.tmdbId);
 
     return json({ position, film }, created ? CREATED : OK);

@@ -31,6 +31,20 @@ export const TMDB_ATTRIBUTION =
 
 export const TMDB_LOGO_ALT = 'The Movie Database (TMDB)';
 
+// The scores come from OMDb, whose content is CC BY-NC 4.0: the licence asks
+// for credit and a link to it. Rotten Tomatoes and IMDb are named on the
+// stickers, so their marks are acknowledged and no endorsement is implied.
+export const OMDB_URL = 'https://www.omdbapi.com/';
+export const OMDB_LICENSE_URL = 'https://creativecommons.org/licenses/by-nc/4.0/';
+export const OMDB_CREDIT = 'Notas de la API de OMDb';
+export const OMDB_LICENSE = 'CC BY-NC 4.0';
+export const IMDB_URL = 'https://www.imdb.com/';
+export const IMDB_CREDIT =
+  'IMDb es una marca de IMDb.com, Inc. Este sitio no está avalado por IMDb ni afiliado a ella.';
+export const RT_URL = 'https://www.rottentomatoes.com/';
+export const RT_CREDIT =
+  'Rotten Tomatoes® y Tomatometer® son marcas de Fandango. Este sitio no está avalado por Rotten Tomatoes ni afiliado a ella.';
+
 // Absent from storage means "follow the system"; the toggle only ever writes an
 // explicit choice, which the CSS honours over the media query.
 export const THEME_STORAGE_KEY = 'videotheque-theme';
@@ -153,6 +167,11 @@ export const CASE_CREW_LABELS: Record<CrewJob, string> = {
 export const CASE_DIRECTED_BY = 'DIRIGIDA POR';
 export const CASE_AND = 'Y';
 export const CASE_FORMAT = 'VHS';
+
+// The score stickers on the case front. The labels name the source in our own
+// type; the fresh tomato and rotten splat are our own drawings, not Rotten
+// Tomatoes' icon files.
+export const STICKER_IMDB_LABEL = 'IMDb';
 
 // The postit is a shelf's `name` drawn on its `accent_color`, which the owner
 // picks freely. This is what the picker opens on for a shelf with no postit.

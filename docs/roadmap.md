@@ -37,6 +37,8 @@ reorder shelves. Check touch dragging on mobile before closing the step.
 
 ## 3. 3D film case
 
+**Status:** done, 2026-11-17 (PR #24, #25).
+
 **Goal:** the pulled-out case becomes the showpiece.
 
 Build the Three.js case described in
@@ -44,20 +46,18 @@ Build the Three.js case described in
 current static case stays as the no-WebGL fallback. Check touch
 interaction on mobile before closing the step.
 
-## 4. Critic's verdict on the case back
+## 4. Score stickers on the case
 
-**Goal:** the back of the case carries a press quote, the way 90s video
-sleeves did.
+**Goal:** the case carries the press a 90s video sleeve did.
 
-Between the synopsis and the billing block, show one critic's verdict with
-its stars, for films rated four or five. The Guardian Open Platform is the
-only public API found with both parts: a review headline that reads as a
-verdict and a `starRating` out of five, with the critic's byline. It is
-English-only and does not cover every film, and it needs a free
-non-commercial key plus a link back to the review. OMDb's Rotten Tomatoes
-percentage can stand beside it as a separate badge. Quotes are only ever
-real ones: a film with no qualifying review shows no quote. FilmAffinity
-and the Spanish press have no API, so they are out.
+Two score stickers stuck on the front of the case, from OMDb: the Rotten
+Tomatoes Tomatometer and the IMDb rating (OMDb has no audience score).
+Spec: `docs/superpowers/specs/2026-11-19-score-stickers-design.md`.
+
+A critic's quote on the back, from The Guardian, was built and dropped: its
+terms forbid keeping its content beyond 24 hours and editing headlines.
+FilmAffinity and the Spanish press have no API. Scores are only ever real
+ones: a film with no score shows no sticker.
 
 ## 5. Visual touches
 

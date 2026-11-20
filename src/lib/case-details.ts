@@ -4,17 +4,34 @@
  * Pure: no DOM, so the billing-block layout is testable in node.
  */
 import type { Company, CrewCredit, CrewJob, FilmRow } from './tmdb-mapping';
+import type { ScoreFields } from './scores';
+
+/** The scores for the front stickers. */
+export interface CaseScores {
+  rt: number | null;
+  imdb: number | null;
+}
 
 export interface CaseDetails {
   backdrops: string[];
   cast: string[];
   crew: CrewCredit[];
   companies: Company[];
+  scores: CaseScores;
 }
 
-export const EMPTY_DETAILS: CaseDetails = { backdrops: [], cast: [], crew: [], companies: [] };
+const NO_SCORES: CaseScores = { rt: null, imdb: null };
 
-type CaseFields = Pick<FilmRow, 'backdrop_paths' | 'cast_names' | 'crew' | 'companies'>;
+export const EMPTY_DETAILS: CaseDetails = {
+  backdrops: [],
+  cast: [],
+  crew: [],
+  companies: [],
+  scores: NO_SCORES,
+};
+
+type CaseFields = Pick<FilmRow, 'backdrop_paths' | 'cast_names' | 'crew' | 'companies'> &
+  Pick<ScoreFields, 'rt_score' | 'imdb_rating'>;
 
 export function toCaseJson(film: CaseFields): string {
   const details: CaseDetails = {
@@ -22,11 +39,28 @@ export function toCaseJson(film: CaseFields): string {
     cast: film.cast_names,
     crew: film.crew,
     companies: film.companies,
+    scores: {
+      rt: film.rt_score,
+      // PostgREST may hand numeric(3,1) back as a string.
+      imdb: film.imdb_rating === null ? null : Number(film.imdb_rating),
+    },
   };
   return JSON.stringify(details);
 }
 
 const arrayOr = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+
+const MAX_PERCENT = 100;
+const MAX_IMDB = 10;
+
+const numberIn = (value: unknown, min: number, max: number) =>
+  typeof value === 'number' && value >= min && value <= max ? value : null;
+
+function parseScores(value: unknown): CaseScores {
+  if (typeof value !== 'object' || value === null) return NO_SCORES;
+  const v = value as Record<string, unknown>;
+  return { rt: numberIn(v.rt, 0, MAX_PERCENT), imdb: numberIn(v.imdb, 0, MAX_IMDB) };
+}
 
 /** Never throws: a film cached before the backfill, or a malformed attribute,
  *  reads as empty details and the back degrades instead of failing. */
@@ -45,8 +79,17 @@ export function parseCaseDetails(json: string | undefined): CaseDetails {
     cast: arrayOr<string>(r.cast),
     crew: arrayOr<CrewCredit>(r.crew),
     companies: arrayOr<Company>(r.companies),
+    scores: parseScores(r.scores),
   };
 }
+
+// Spanish typography: a narrow no-break space before the percent sign, and a
+// decimal comma.
+const NARROW_NBSP = '\u202F';
+const IMDB_DECIMALS = 1;
+
+export const rtSticker = (score: number) => `${score}${NARROW_NBSP}%`;
+export const imdbSticker = (rating: number) => rating.toFixed(IMDB_DECIMALS).replace('.', ',');
 
 /** One printed line per job: label, then up to two names joined by `and`.
  *  The director, when given, closes the block, as on a 90s sleeve. */
@@ -139,3 +182,10 @@ export function sceneFrames(
   const pair = [small(x), small(x + smallW + gap)];
   return n === MAX_SCENES ? [big, ...pair] : pair;
 }
+
+/** Rotten Tomatoes calls a film fresh at a Tomatometer of 60 % or more. */
+const RT_FRESH_MIN = 60;
+
+export type RtVerdict = 'fresh' | 'rotten';
+
+export const rtVerdict = (score: number): RtVerdict => (score >= RT_FRESH_MIN ? 'fresh' : 'rotten');
