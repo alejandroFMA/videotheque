@@ -48,6 +48,8 @@ interaction on mobile before closing the step.
 
 ## 4. Score stickers on the case
 
+**Status:** done, 2026-11-20 (PR #26).
+
 **Goal:** the case carries the press a 90s video sleeve did.
 
 Two score stickers stuck on the front of the case, from OMDb: the Rotten
@@ -67,6 +69,10 @@ ones: a film with no score shows no sticker.
   the spine.
 - A subtle glow on the case edges as a film is lifted. It comes after step
   3 because it depends on how the lift animation ends up.
+- A VHS spine on the 3D case: a poster thumbnail at the top, and the "VHS"
+  mark and the studio logo at the foot. The mark moves there from the back.
+
+Spec: `docs/superpowers/specs/2026-11-20-visual-touches-design.md`.
 
 ## 6. Films in Spanish
 
@@ -106,3 +112,12 @@ language.
 Friends will not send stack traces. Keep a minimal way to notice failures,
 such as watching the Vercel logs or a "something is wrong" link, in place
 across all the steps above.
+
+## To investigate: the case stutters on its way back
+
+Closing the 3D case sometimes stutters as it flies back to its slot: frames
+of 80–100 ms in the close tween, on `main` as well as with the step 5 glow
+on, so the glow is not the cause. Measured in Orca's embedded browser, which
+throttles animation while driven from outside, so the numbers are not
+conclusive. Profile the close in Chrome DevTools (Performance panel) before
+deciding on a fix.

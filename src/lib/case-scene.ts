@@ -6,7 +6,7 @@
  */
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { distinctScenes, parseCaseDetails, type CaseDetails } from './case-details';
+import { distinctScenes, firstLoaded, parseCaseDetails, type CaseDetails } from './case-details';
 import {
   CAMERA_Z,
   CASE_DEPTH,
@@ -22,6 +22,7 @@ import {
   poseFromRect,
   type Pose,
 } from './case-pose';
+import { glowFilter, glowOnClose, glowOnOpen } from './case-glow';
 import {
   backCanvas,
   edgeCanvas,
@@ -258,6 +259,12 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
   /** Bumped by every open and abort, so an open still awaiting its images
    *  knows it was abandoned. */
   let generation = 0;
+  /** The opened film's spine colour, which tints its glow both ways. */
+  let glowColor = '';
+
+  const glow = (level: number) => {
+    canvas.style.filter = glowFilter(glowColor, level);
+  };
 
   const viewport = () => ({ width: innerWidth, height: innerHeight });
 
@@ -351,6 +358,7 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
 
   const teardown = () => {
     renderer.setAnimationLoop(null);
+    canvas.style.filter = '';
     disposeCase();
     canvas.remove();
     slot?.classList.remove(SLOT_OUT);
@@ -436,6 +444,7 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
       slot = target;
       const ticket = ++generation;
       const film = filmFromSlot(target);
+      glowColor = film.spineColor;
       const details: CaseDetails = parseCaseDetails(target.dataset.case);
       const rect = spineRect();
 
@@ -454,7 +463,7 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
       const edge = toTexture(edgeCanvas(film));
       mesh = new THREE.Mesh(new THREE.BoxGeometry(CASE_WIDTH, 1, CASE_DEPTH), [
         plastic(toTexture(sideCanvas(film, CASE_DEPTH))),
-        plastic(toTexture(spineCanvas(film, CASE_DEPTH))),
+        plastic(toTexture(spineCanvas(film, CASE_DEPTH, { poster: posterImg, logo: null }))),
         plastic(edge),
         plastic(edge.clone()),
         plastic(front),
@@ -463,10 +472,16 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
       mesh.castShadow = true;
       scene.add(mesh);
 
-      // The back is redrawn once the scenes and logos have settled.
+      // The back and the spine are redrawn once the scenes and logos have settled.
       const opened = mesh;
       void Promise.all([backdrops, logos]).then(([scenes, logoImgs]) => {
         if (mesh !== opened) return;
+        const spine = opened.material[1];
+        spine.map?.dispose();
+        spine.map = toTexture(
+          spineCanvas(film, CASE_DEPTH, { poster: posterImg, logo: firstLoaded(logoImgs) }),
+        );
+        spine.needsUpdate = true;
         const back = opened.material[5];
         back.map?.dispose();
         back.map = toTexture(
@@ -492,6 +507,7 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
       renderer.setAnimationLoop(frame);
       busy = false;
       await run(OPEN_MS, (t) => {
+        glow(glowOnOpen(t, OPEN_LIFT_SHARE));
         if (t < OPEN_LIFT_SHARE) {
           pose = lerpPose(home, up, easeOut(t / OPEN_LIFT_SHARE));
           return;
@@ -518,6 +534,7 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
       const up = lifted(home);
       const dropAt = 1 - CLOSE_DROP_SHARE;
       await run(CLOSE_MS, (t) => {
+        glow(glowOnClose(t, CLOSE_DROP_SHARE));
         if (t < dropAt) {
           const u = t / dropAt;
           const p = lerpPose(from, up, easeInOut(u));
@@ -538,6 +555,7 @@ export function createCaseController(options: CaseControllerOptions): CaseContro
       }
       drag = null;
       cancelTween();
+      canvas.style.filter = '';
       const from = { ...pose };
       canvas.style.transition = `opacity ${DISMISS_MS}ms ease`;
       canvas.style.opacity = '0';

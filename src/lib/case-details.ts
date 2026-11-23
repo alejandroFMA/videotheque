@@ -189,3 +189,64 @@ const RT_FRESH_MIN = 60;
 export type RtVerdict = 'fresh' | 'rotten';
 
 export const rtVerdict = (score: number): RtVerdict => (score >= RT_FRESH_MIN ? 'fresh' : 'rotten');
+
+export function firstLoaded<T>(items: (T | null)[]): T | null {
+  return items.find((item): item is T => item !== null) ?? null;
+}
+
+export interface SpineLayout {
+  thumb: { left: number; top: number; width: number; height: number } | null;
+  titleTop: number;
+  titleMax: number;
+  markMiddle: number;
+  markHeight: number;
+  logo: { top: number; maxWidth: number; maxHeight: number } | null;
+}
+
+// In canvas px of the case spine (a 200px strip); signed off on the prototype.
+const SPINE = {
+  thumbWidth: 0.84,
+  thumbRatio: 1.15,
+  thumbTop: 40,
+  thumbGap: 46,
+  markHeight: 64,
+  titleGap: 40,
+  logoMaxWidth: 130,
+  logoMaxHeight: 80,
+  footGap: 16,
+  bottom: 48,
+};
+// Without a thumbnail the title starts where the shelf spine's does.
+const SHELF_SPINE_HEIGHT = 172;
+const SHELF_TITLE_TOP_PX = 13;
+const SHELF_TITLE_TOP = SHELF_TITLE_TOP_PX / SHELF_SPINE_HEIGHT;
+
+/** Top to bottom: poster thumbnail, title, the "VHS" mark, the studio logo.
+ *  A missing thumbnail or logo takes no room. */
+export function spineLayout(
+  width: number,
+  height: number,
+  hasThumb: boolean,
+  hasLogo: boolean,
+): SpineLayout {
+  const thumbW = width * SPINE.thumbWidth;
+  const thumb = hasThumb
+    ? {
+        left: (width - thumbW) / 2,
+        top: SPINE.thumbTop,
+        width: thumbW,
+        height: thumbW * SPINE.thumbRatio,
+      }
+    : null;
+  const titleTop = thumb ? thumb.top + thumb.height + SPINE.thumbGap : height * SHELF_TITLE_TOP;
+
+  const logoTop = height - SPINE.bottom - SPINE.logoMaxHeight;
+  const logo = hasLogo
+    ? { top: logoTop, maxWidth: SPINE.logoMaxWidth, maxHeight: SPINE.logoMaxHeight }
+    : null;
+  const markBottom = logo ? logo.top - SPINE.footGap : height - SPINE.bottom;
+  const markMiddle = markBottom - SPINE.markHeight / 2;
+  const titleMax = markBottom - SPINE.markHeight - SPINE.titleGap - titleTop;
+
+  return { thumb, titleTop, titleMax, markMiddle, markHeight: SPINE.markHeight, logo };
+}
